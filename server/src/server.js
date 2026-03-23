@@ -13,7 +13,7 @@ import { app, server } from "./lib/socket.js";
 
 dotenv.config();
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 5001; // Added a fallback port just in case
 const __dirname = path.resolve();
 
 app.use(express.json());
@@ -26,12 +26,14 @@ app.use(cors({
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
+// Must be "production" for Render deployment
 if (process.env.NODE_ENV === "development") {
-  app.use(express.static(path.join(__dirname, "../../client/dist")));
+  // Look directly inside the client/dist folder from the root
+  app.use(express.static(path.join(__dirname, "client", "dist")));
 
   // FIX: Using a RegExp /.*/ catches all routes safely in Express 5
   app.get(/.*/, (req, res) => {
-    res.sendFile(path.join(__dirname, "../../client/dist/index.html"));
+    res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
   });
 }
 
