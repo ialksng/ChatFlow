@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useAuthStore } from "../store/useAuthStore";
+import { User } from "lucide-react";
 
 import logo from "../assets/logo.png";
 
@@ -35,8 +37,8 @@ const SignUpPage = () => {
                         group-hover:bg-primary/20 transition-colors"
                         >
                             <img 
-                                src="/logo.png" 
-                                alt="Logo" 
+                                src={logo}
+                                alt="ChatFlow" 
                                 className="size-8 object-contain" 
                             />
                         </div>
@@ -65,7 +67,7 @@ const SignUpPage = () => {
                         </div>
                     </div>
                 </form>
-                
+
             </div>
         </div>
     </div>
