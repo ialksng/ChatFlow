@@ -4,7 +4,7 @@
   "description": "",
   "main": "server/index.js",
   "scripts": {
-    "build": "npm install --prefix server && npm install --include=dev --prefix client && npm run build --prefix client",
+    "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client",
     "start": "node server/src/server.js"
   },
   "repository": {
