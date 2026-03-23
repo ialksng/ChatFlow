@@ -30,7 +30,7 @@ if (process.env.NODE_ENV === "production") {
   // FIX 1: Removed "../" because __dirname is already the root of your project
   app.use(express.static(path.join(__dirname, "client", "dist")));
 
-  app.get("/.*/", (req, res) => {
+  app.get(/.*/, (req, res) => {
     // FIX 1: Also removed "../" here
     res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
   });
