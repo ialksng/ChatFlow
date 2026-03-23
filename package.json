@@ -2,7 +2,7 @@
   "name": "chatflow",
   "version": "1.0.0",
   "description": "",
-  "main": "server/index.js",
+  "main": "server/src/server.js",
   "scripts": {
     "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client",
     "start": "node server/src/server.js"
@@ -11,10 +11,13 @@
     "type": "git",
     "url": "git+https://github.com/ialksng/ChatFlow.git"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/ialksng/ChatFlow/issues"
   },
