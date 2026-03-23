@@ -150,7 +150,7 @@ const SignUpPage = () => {
 
         {/* right side */}
 
-        <AuthImage />
+        <AuthImage type="signup" />
     </div>
   );
 };
