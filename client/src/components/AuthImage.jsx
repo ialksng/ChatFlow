@@ -13,7 +13,7 @@ const AuthImage = ({ type }) => {
           <img
             src={image}
             alt="Auth Visual"
-            className="w-full max-w-sm mx-auto rounded-2xl shadow-lg"
+            className="max-h-[500px] w-auto mx-auto object-contain rounded-2xl shadow-lg"
           />
         </div>
       </div>
