@@ -27,14 +27,17 @@ app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
 if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "../client/dist")));
+  // FIX 1: Removed "../" because __dirname is already the root of your project
+  app.use(express.static(path.join(__dirname, "client", "dist")));
 
   app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "../client", "dist", "index.html"));
+    // FIX 1: Also removed "../" here
+    res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
   });
 };
 
-app.listen(PORT, () => {
+// FIX 2: Changed app.listen to server.listen so Socket.io works properly
+server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     connectDB();
 });
