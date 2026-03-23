@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
-import { User } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Mail, User } from "lucide-react";
 
-import logo from "../assets/logo.png";
+import logo from "../assets/logo-auth.png";
 
 const SignUpPage = () => {
   const [showPassword, setShowPassword] = useState(false);
