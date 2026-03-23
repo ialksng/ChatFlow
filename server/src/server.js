@@ -27,14 +27,13 @@ app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
 if (process.env.NODE_ENV === "development") {
-  // FIX 1: Removed "../" because __dirname is already the root of your project
-  app.use(express.static(path.join(__dirname, "client", "dist")));
+  app.use(express.static(path.join(__dirname, "../../client/dist")));
 
-  app.get("*", (req, res) => {
-    // FIX 1: Also removed "../" here
-    res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
+  // FIX: Using a RegExp /.*/ catches all routes safely in Express 5
+  app.get(/.*/, (req, res) => {
+    res.sendFile(path.join(__dirname, "../../client/dist/index.html"));
   });
-};
+}
 
 // FIX 2: Changed app.listen to server.listen so Socket.io works properly
 server.listen(PORT, () => {
