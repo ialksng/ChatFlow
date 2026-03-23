@@ -3,6 +3,7 @@ import { useAuthStore } from "../store/useAuthStore";
 import { Eye, EyeOff, Loader2, Lock, Mail, User } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import AuthImage from "../components/AuthImage.jsx";
 import logo from "../assets/logo-auth.png";
 
 const SignUpPage = () => {
@@ -137,6 +138,14 @@ const SignUpPage = () => {
                 </div>
             </div>
         </div>
+
+        {/* right side */}
+
+        <AuthImage
+            title="Join our community"
+            subtitle="Connect with friends, share moments, and stay in touch with your loved ones."
+        />
+
     </div>
   );
 };
