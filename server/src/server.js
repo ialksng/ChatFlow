@@ -27,7 +27,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
 // Must be "production" for Render deployment
-if (process.env.NODE_ENV === "development") {
+if (process.env.NODE_ENV === "production") {
   // Look directly inside the client/dist folder from the root
   app.use(express.static(path.join(__dirname, "client", "dist")));
 
