@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuthStore } from "../store/useAuthStore";
+import { useAuthStore } from "../store/useAuthStore.js";
 import { Eye, EyeOff, Loader2, Lock, Mail, User } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -141,11 +141,7 @@ const SignUpPage = () => {
 
         {/* right side */}
 
-        <AuthImage
-            title="Join our community"
-            subtitle="Connect with friends, share moments, and stay in touch with your loved ones."
-        />
-
+        <AuthImage />
     </div>
   );
 };
