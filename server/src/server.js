@@ -26,7 +26,7 @@ app.use(cors({
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
-if (process.env.NODE_ENV === "production") {
+if (process.env.NODE_ENV === "development") {
   // FIX 1: Removed "../" because __dirname is already the root of your project
   app.use(express.static(path.join(__dirname, "client", "dist")));
 
