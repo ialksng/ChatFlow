@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import logo from "../assets/logo.png";
+
 const SignUpPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -8,7 +10,44 @@ const SignUpPage = () => {
     password: "",
   });
 
-  return <div>SignUpPage</div>
+  const { signup, isSigningUp } = useAuthStore();
+
+  const validateForm = () => {};
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    const success = validateForm();
+
+    if (success === true) signup(formData);
+  };
+
+  return (
+    <div className="min-h-screen grid lg:grid-cols-2">
+        {/* left side */}
+        <div className="flex flex-col justify-center items-center p-6 sm:p-12">
+            <div className="w-full max-w-md space-y-8">
+                {/* LOGO */}
+                <div className="text-center mb-8">
+                    <div className="flex flex-col items-center gap-2 group">
+                        <div
+                            className="size-12 rounded-xl bg-primary/10 flex items-center justify-center 
+                        group-hover:bg-primary/20 transition-colors"
+                        >
+                            <img 
+                                src="/logo.png" 
+                                alt="Logo" 
+                                className="size-8 object-contain" 
+                            />
+                        </div>
+                        <h1 className="text-2xl font-bold mt-2">Create Account</h1>
+                        <p className="text-base-content/60">Get started with your free account</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+  );
 };
 
 export default SignUpPage;
