@@ -31,19 +31,15 @@ const getRobustMediaStream = async (mode) => {
   }
 
   // WebRTC Hack: Add dummy silent tracks if missing so the connection succeeds 
-  // and screen-share's 'replaceTrack' always has a track to replace!
   if (!hasVideo) {
     const canvas = document.createElement("canvas");
     canvas.width = 2; 
     canvas.height = 2;
-    // CRITICAL FIX: Draw a black pixel so the browser actually transmits data. 
-    // An empty canvas can cause WebRTC to freeze the audio track!
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "black";
     ctx.fillRect(0, 0, 2, 2);
 
     const dummyVideo = canvas.captureStream(1).getVideoTracks()[0];
-    // CRITICAL FIX: Do NOT set enabled = false. Leave it active so data flows.
     stream.addTrack(dummyVideo);
   }
   
@@ -75,7 +71,7 @@ export const useCallStore = create((set, get) => ({
   isScreenSharing: false,
   remoteIsScreenSharing: false, 
 
-  iceServers: null, // Cache them so we don't fetch from Twilio repeatedly
+  iceServers: null, 
 
   fetchIceServers: async () => {
     if (get().iceServers) return { iceServers: get().iceServers };
@@ -110,7 +106,6 @@ export const useCallStore = create((set, get) => ({
     });
 
     socket.on("ice-candidate", async (candidate) => {
-      // Catch our custom makeshift screen-share signal
       if (candidate && candidate.type === "CUSTOM_SIGNAL") {
         if (candidate.action === "SCREEN_SHARE_ON") set({ remoteIsScreenSharing: true });
         if (candidate.action === "SCREEN_SHARE_OFF") set({ remoteIsScreenSharing: false });
@@ -153,13 +148,25 @@ export const useCallStore = create((set, get) => ({
     let stream = await getRobustMediaStream(mode);
     set({ localStream: stream });
 
-    const turnServers = await get().fetchIceServers();
-    const pc = new RTCPeerConnection(turnServers);
+    const turnConfig = await get().fetchIceServers();
+    const pc = new RTCPeerConnection({
+      ...turnConfig,
+      // iceTransportPolicy: "relay" // Uncomment this to FORCE Twilio TURN servers for testing
+    });
     set({ peerConnection: pc });
 
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-    pc.ontrack = (event) => set({ remoteStream: event.streams[0] });
+    // ROBUST TRACK HANDLING
+    pc.ontrack = (event) => {
+      const [remoteStream] = event.streams;
+      if (remoteStream) {
+        set({ remoteStream });
+      } else {
+        const newStream = new MediaStream([event.track]);
+        set({ remoteStream: newStream });
+      }
+    };
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -189,13 +196,25 @@ export const useCallStore = create((set, get) => ({
     let stream = await getRobustMediaStream(callMode);
     set({ localStream: stream });
 
-    const turnServers = await get().fetchIceServers();
-    const pc = new RTCPeerConnection(turnServers);
+    const turnConfig = await get().fetchIceServers();
+    const pc = new RTCPeerConnection({
+      ...turnConfig,
+      // iceTransportPolicy: "relay" // Uncomment this to FORCE Twilio TURN servers for testing
+    });
     set({ peerConnection: pc });
 
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-    pc.ontrack = (event) => set({ remoteStream: event.streams[0] });
+    // ROBUST TRACK HANDLING
+    pc.ontrack = (event) => {
+      const [remoteStream] = event.streams;
+      if (remoteStream) {
+        set({ remoteStream });
+      } else {
+        const newStream = new MediaStream([event.track]);
+        set({ remoteStream: newStream });
+      }
+    };
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -266,17 +285,14 @@ export const useCallStore = create((set, get) => ({
         const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
         if (sender) await sender.replaceTrack(screenTrack);
 
-        // Signal the remote user's UI to make the video visible
         if (socket && remoteUserId) {
           socket.emit("ice-candidate", { to: remoteUserId, candidate: { type: "CUSTOM_SIGNAL", action: "SCREEN_SHARE_ON" }});
         }
 
-        // Swap out local UI preview
         const oldVideo = localStream.getVideoTracks()[0];
         if (oldVideo) localStream.removeTrack(oldVideo);
         localStream.addTrack(screenTrack);
 
-        // Bind the native browser "Stop Sharing" button
         screenTrack.onended = () => {
           if (get().isScreenSharing) {
             get().toggleScreenShare();
@@ -293,25 +309,20 @@ export const useCallStore = create((set, get) => ({
           if (callMode === "video") {
             const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
             newVideoTrack = camStream.getVideoTracks()[0];
-            // Ensure the camera respects the user's previous mute state
             newVideoTrack.enabled = isVideoOn;
           }
         } catch (camErr) {
           console.error("Failed to restore camera, falling back to dummy track", camErr);
         }
 
-        // Fallback for audio calls OR if camera permissions are blocked during revert
         if (!newVideoTrack) {
           const canvas = document.createElement("canvas");
-          canvas.width = 2; // FIX: Ensure canvas has width
-          canvas.height = 2; // FIX: Ensure canvas has height
-          
+          canvas.width = 2; 
+          canvas.height = 2;
           const ctx = canvas.getContext("2d");
           ctx.fillStyle = "black";
-          ctx.fillRect(0, 0, 2, 2); // FIX: Draw pixel so browser transmits data
-
+          ctx.fillRect(0, 0, 2, 2);
           newVideoTrack = canvas.captureStream(1).getVideoTracks()[0];
-          // FIX: Leave track enabled
         }
 
         const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
@@ -323,7 +334,6 @@ export const useCallStore = create((set, get) => ({
 
         const oldVideo = localStream.getVideoTracks()[0];
         if (oldVideo) { 
-          // CRITICAL FIX: Unbind onended before stopping to prevent race condition loop
           oldVideo.onended = null; 
           oldVideo.stop(); 
           localStream.removeTrack(oldVideo); 
@@ -334,7 +344,6 @@ export const useCallStore = create((set, get) => ({
         set({ isScreenSharing: false });
       } catch (err) { 
         console.error("Failed to revert screen share fully", err);
-        // Force UI reset even if background track replacement fails
         set({ isScreenSharing: false });
       }
     }
