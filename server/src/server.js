@@ -19,7 +19,7 @@ const __dirname = path.resolve();
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
-    origin: process.env.CLIENT_API,
+    origin: ["https://ialksng.me", "https://www.ialksng.me", "http://localhost:5173"],
     credentials: true,
 }));
 

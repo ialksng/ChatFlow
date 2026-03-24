@@ -7,7 +7,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_API,
+    origin: ["https://ialksng.me", "https://www.ialksng.me", "http://localhost:5173"],
     credentials: true
   },
 });
