@@ -28,7 +28,6 @@ const CallOverlay = () => {
   if (callState === "idle") return null;
 
   return (
-    // 📱 Removed padding on mobile, added it back on sm: screens
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm sm:p-4">
       
       {/* 1. Incoming Call UI */}
@@ -57,10 +56,8 @@ const CallOverlay = () => {
 
       {/* 3. Active UI */}
       {callState === "active" && (
-        // 📱 Full height and width on mobile, rounded only on larger screens
         <div className="flex flex-col w-full h-full sm:h-[90vh] max-w-6xl mx-auto bg-base-100 sm:rounded-2xl overflow-hidden shadow-2xl">
           
-          {/* Header */}
           <div className="flex items-center justify-between p-3 sm:p-4 bg-base-200/50 border-b border-base-300">
             <div className="flex items-center gap-2 sm:gap-3">
               <span className="relative flex h-3 w-3">
@@ -78,22 +75,22 @@ const CallOverlay = () => {
             )}
           </div>
 
-          {/* Main Area */}
           <div className="flex-1 sm:p-4 bg-base-100 relative overflow-hidden flex">
             {callMode === "draw" ? (
               <Whiteboard />
             ) : (
               <div className="w-full h-full relative sm:rounded-xl overflow-hidden bg-base-300 sm:border border-base-200">
                 
-                {/* Remote Stream - Always render the video, just hide it visually if audio call */}
+                {/* FIX: Replaced "hidden" with "opacity-0 absolute -z-10".
+                  This prevents the browser from pausing the audio!
+                */}
                 <video 
                   ref={remoteVideoRef} 
                   autoPlay 
                   playsInline 
-                  className={`w-full h-full object-cover ${callMode === "audio" ? "hidden" : ""}`} 
+                  className={`w-full h-full object-cover ${callMode === "audio" ? "opacity-0 absolute inset-0 pointer-events-none -z-10" : ""}`} 
                 />
 
-                {/* Audio Call UI Overlay */}
                 {callMode === "audio" && (
                   <div className="absolute inset-0 z-0 w-full h-full flex flex-col items-center justify-center animate-pulse gap-4 bg-base-300">
                      <div className="w-24 h-24 bg-primary/20 rounded-full flex items-center justify-center">
@@ -112,18 +109,18 @@ const CallOverlay = () => {
                 {/* Local Stream (PIP) */}
                 <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 w-24 sm:w-32 md:w-48 aspect-video bg-black rounded-lg sm:rounded-xl overflow-hidden shadow-2xl border-2 border-base-100 z-10">
                   
-                  {/* Local Stream - Always render, hide visually if audio */}
+                  {/* FIX: Hide local video frame if camera is toggled off */}
                   <video 
                     ref={localVideoRef} 
                     autoPlay 
                     playsInline 
                     muted 
-                    className={`w-full h-full object-cover ${!isScreenSharing && "transform scale-x-[-1]"} ${callMode === "audio" ? "hidden" : ""}`} 
+                    className={`w-full h-full object-cover ${!isScreenSharing && "transform scale-x-[-1]"} ${(callMode === "audio" || !isVideoOn) ? "opacity-0 absolute inset-0 pointer-events-none -z-10" : ""}`} 
                   />
 
-                  {callMode === "audio" && (
+                  {(callMode === "audio" || !isVideoOn) && (
                     <div className="absolute inset-0 z-0 w-full h-full flex items-center justify-center text-xs sm:text-sm text-base-content/50 bg-base-300">
-                      You
+                      {callMode === "audio" ? "You" : <VideoOff className="size-6 opacity-60" />}
                     </div>
                   )}
                 </div>
@@ -131,7 +128,6 @@ const CallOverlay = () => {
             )}
           </div>
 
-          {/* Media Controls Footer */}
           {(callMode === "video" || callMode === "audio") && (
             <div className="p-3 sm:p-4 bg-base-200/50 flex flex-wrap items-center justify-center gap-2 sm:gap-4 border-t border-base-300">
               <button 
@@ -165,7 +161,6 @@ const CallOverlay = () => {
               </button>
             </div>
           )}
-
         </div>
       )}
     </div>
