@@ -1,13 +1,15 @@
 import { useRef, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
-import { Image, Send, X } from "lucide-react";
+import { useAuthStore } from "../store/useAuthStore";
+import { Image, Send, X, Reply } from "lucide-react";
 import toast from "react-hot-toast";
 
 const MessageInput = () => {
   const [text, setText] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
   const fileInputRef = useRef(null);
-  const { sendMessage } = useChatStore();
+  const { sendMessage, replyingTo, setReplyingTo } = useChatStore();
+  const { authUser } = useAuthStore();
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -48,7 +50,32 @@ const MessageInput = () => {
   };
 
   return (
-    <div className="p-4 w-full">
+    <div className="p-4 w-full flex flex-col gap-2 border-t border-base-300">
+      
+      {/* --- NEW: Replying To Indicator --- */}
+      {replyingTo && (
+        <div className="flex items-center justify-between bg-base-200 p-2 rounded-lg border-l-4 border-primary">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <Reply className="size-4 text-primary shrink-0" />
+            <div className="flex flex-col text-xs sm:text-sm truncate">
+              <span className="font-semibold text-primary">
+                Replying to {replyingTo.senderId === authUser._id ? "yourself" : "message"}
+              </span>
+              <span className="text-base-content/70 truncate">
+                {replyingTo.text || "📷 Image"}
+              </span>
+            </div>
+          </div>
+          <button 
+            onClick={() => setReplyingTo(null)} 
+            className="btn btn-ghost btn-xs btn-circle"
+            type="button"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
       {imagePreview && (
         <div className="mb-3 flex items-center gap-2">
           <div className="relative">

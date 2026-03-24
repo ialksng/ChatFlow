@@ -4,15 +4,12 @@ import cloudinary from "../lib/cloudinary.js";
 import { getReceiverSocketId, io } from "../lib/socket.js";
 import Groq from "groq-sdk";
 
-// Initialize Groq Client
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export const getUsersForSidebar = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
-    // Ensure the AI User is also fetched in the sidebar 
     const filteredUsers = await User.find({ _id: { $ne: loggedInUserId } }).select("-password");
-
     res.status(200).json(filteredUsers);
   } catch (error) {
     console.error("Error in getUsersForSidebar: ", error.message);
@@ -30,7 +27,7 @@ export const getMessages = async (req, res) => {
         { senderId: myId, receiverId: userToChatId },
         { senderId: userToChatId, receiverId: myId },
       ],
-    });
+    }).populate("replyTo", "text image senderId"); // Populate reply info
 
     res.status(200).json(messages);
   } catch (error) {
@@ -41,7 +38,8 @@ export const getMessages = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { text, image } = req.body;
+    // ADDED: replyTo extraction
+    const { text, image, replyTo } = req.body;
     const { id: receiverId } = req.params;
     const senderId = req.user._id;
 
@@ -51,85 +49,64 @@ export const sendMessage = async (req, res) => {
       imageUrl = uploadResponse.secure_url;
     }
 
-    // 1. Save the User's Message
     const newMessage = new Message({
       senderId,
       receiverId,
       text,
       image: imageUrl,
+      replyTo: replyTo || null, // ADDED: Save replyTo
     });
     await newMessage.save();
 
-    // 2. Respond to client immediately with their own message to update UI instantly
+    // Populate reply data before sending to client
+    if (replyTo) {
+      await newMessage.populate("replyTo", "text image senderId");
+    }
+
     res.status(201).json(newMessage);
 
-    // 3. Check if the receiver is the AI User
     if (receiverId === process.env.AI_USER_ID) {
+      // ... [Keep your existing AI logic here exactly as is] ...
       const userSocketId = getReceiverSocketId(senderId);
-
       try {
-        // Emit "typing" event to the user so it looks like the AI is typing
-        if (userSocketId) {
-          io.to(userSocketId).emit("typing", { senderId: receiverId });
-        }
-
-        // FIX 1: Fetch ONLY the last 4 messages to prevent context anchoring
+        if (userSocketId) io.to(userSocketId).emit("typing", { senderId: receiverId });
+        
         const previousMessages = await Message.find({
           $or: [
             { senderId: senderId, receiverId: receiverId },
             { senderId: receiverId, receiverId: senderId },
           ],
-        })
-          .sort({ createdAt: -1 }) // Sort descending to get newest first
-          .limit(4);
-
-        // Reverse so the AI sees them in standard chronological order
+        }).sort({ createdAt: -1 }).limit(4);
         previousMessages.reverse();
 
-        // Format messages for Groq
         const formattedMessages = previousMessages.map((msg) => ({
           role: msg.senderId.toString() === senderId.toString() ? "user" : "assistant",
           content: msg.text || (msg.image ? "[User sent an image]" : ""),
         }));
 
-        // Call Groq API
         const chatCompletion = await groq.chat.completions.create({
           messages: [
-            {
-              role: "system",
-              // FIX 2: Extremely strict system prompt about changing topics
-              content: "You are BuddyBot in the ChatFlow app. CRITICAL INSTRUCTION: You suffer from extreme context blindness. You MUST base your entire response ONLY on the user's very last message. If the user changes topics, completely ignore the previous messages. Be concise and friendly.",
-            },
+            { role: "system", content: "You are BuddyBot in the ChatFlow app. CRITICAL INSTRUCTION: You suffer from extreme context blindness. You MUST base your entire response ONLY on the user's very last message. If the user changes topics, completely ignore the previous messages. Be concise and friendly." },
             ...formattedMessages,
           ],
-          model: "openai/gpt-oss-120b", // Using the highly capable 70B model
+          model: "openai/gpt-oss-120b",
           temperature: 0.7,
         });
 
-        const aiResponseText = chatCompletion.choices[0]?.message?.content || "Sorry, I encountered an error thinking about that.";
-
-        // Save AI's response to the database
         const aiMessage = new Message({
-          senderId: receiverId, // AI is the sender
-          receiverId: senderId, // User is the receiver
-          text: aiResponseText,
+          senderId: receiverId,
+          receiverId: senderId,
+          text: chatCompletion.choices[0]?.message?.content || "Sorry, I encountered an error.",
         });
         await aiMessage.save();
 
-        // Emit AI's message back to the user via Socket.io
-        if (userSocketId) {
-          io.to(userSocketId).emit("newMessage", aiMessage);
-        }
+        if (userSocketId) io.to(userSocketId).emit("newMessage", aiMessage);
       } catch (aiError) {
         console.error("Groq AI processing error: ", aiError.message);
       } finally {
-        // Stop the typing indicator whether the API call succeeded or failed
-        if (userSocketId) {
-          io.to(userSocketId).emit("stopTyping", { senderId: receiverId });
-        }
+        if (userSocketId) io.to(userSocketId).emit("stopTyping", { senderId: receiverId });
       }
     } else {
-      // 4. Standard User-to-User routing via Socket.io
       const receiverSocketId = getReceiverSocketId(receiverId);
       if (receiverSocketId) {
         io.to(receiverSocketId).emit("newMessage", newMessage);
@@ -137,9 +114,115 @@ export const sendMessage = async (req, res) => {
     }
   } catch (error) {
     console.log("Error in sendMessage controller: ", error.message);
-    // Ensure we don't try to send headers again if the error happens after res.status(201)
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Internal server error" });
+    if (!res.headersSent) res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// --- NEW FUNCTIONALITIES BELOW ---
+
+export const deleteMessage = async (req, res) => {
+  try {
+    const { id: messageId } = req.params;
+    const senderId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ error: "Message not found" });
+
+    // Ensure only the sender can delete the message
+    if (message.senderId.toString() !== senderId.toString()) {
+      return res.status(403).json({ error: "Unauthorized to delete this message" });
     }
+
+    // Soft delete implementation
+    message.isDeleted = true;
+    message.text = "This message was deleted";
+    message.image = null; // Clear image if any
+    await message.save();
+
+    res.status(200).json(message);
+
+    // Notify receiver
+    const receiverSocketId = getReceiverSocketId(message.receiverId);
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("messageUpdated", message);
+    }
+  } catch (error) {
+    console.log("Error in deleteMessage: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const editMessage = async (req, res) => {
+  try {
+    const { id: messageId } = req.params;
+    const { text } = req.body;
+    const senderId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ error: "Message not found" });
+    if (message.isDeleted) return res.status(400).json({ error: "Cannot edit a deleted message" });
+    
+    if (message.senderId.toString() !== senderId.toString()) {
+      return res.status(403).json({ error: "Unauthorized to edit this message" });
+    }
+
+    message.text = text;
+    message.isEdited = true;
+    await message.save();
+
+    res.status(200).json(message);
+
+    // Notify receiver
+    const receiverSocketId = getReceiverSocketId(message.receiverId);
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("messageUpdated", message);
+    }
+  } catch (error) {
+    console.log("Error in editMessage: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const reactToMessage = async (req, res) => {
+  try {
+    const { id: messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ error: "Message not found" });
+
+    // Check if user already reacted
+    const existingReactionIndex = message.reactions.findIndex(
+      (r) => r.user.toString() === userId.toString()
+    );
+
+    if (existingReactionIndex !== -1) {
+      // If clicking the same emoji, toggle it off (remove reaction)
+      if (message.reactions[existingReactionIndex].emoji === emoji) {
+        message.reactions.splice(existingReactionIndex, 1);
+      } else {
+        // Change to new emoji
+        message.reactions[existingReactionIndex].emoji = emoji;
+      }
+    } else {
+      // Add new reaction
+      message.reactions.push({ user: userId, emoji });
+    }
+
+    await message.save();
+    
+    // Determine the other user in the chat to notify them
+    const otherUserId = message.senderId.toString() === userId.toString() ? message.receiverId : message.senderId;
+    const otherUserSocketId = getReceiverSocketId(otherUserId);
+    
+    res.status(200).json(message);
+
+    if (otherUserSocketId) {
+      io.to(otherUserSocketId).emit("messageUpdated", message);
+    }
+  } catch (error) {
+    console.log("Error in reactToMessage: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
