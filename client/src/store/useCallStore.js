@@ -19,6 +19,11 @@ export const useCallStore = create((set, get) => ({
   remoteStream: null,
   peerConnection: null,
 
+  // Media States
+  isMicOn: true,
+  isVideoOn: true,
+  isScreenSharing: false,
+
   listenToCallEvents: () => {
     const socket = useAuthStore.getState().socket;
     if (!socket) return;
@@ -71,7 +76,10 @@ export const useCallStore = create((set, get) => ({
       callState: "calling", 
       callMode: mode,
       remoteUserId: selectedUser._id,
-      callerName: selectedUser.fullName
+      callerName: selectedUser.fullName,
+      isMicOn: true,
+      isVideoOn: true,
+      isScreenSharing: false,
     });
 
     let stream = null;
@@ -126,7 +134,7 @@ export const useCallStore = create((set, get) => ({
     const { socket } = useAuthStore.getState();
     if (!socket) return;
 
-    set({ callState: "active" });
+    set({ callState: "active", isMicOn: true, isVideoOn: true, isScreenSharing: false });
 
     let stream = null;
     if (callMode === "video" || callMode === "audio") {
@@ -198,7 +206,65 @@ export const useCallStore = create((set, get) => ({
       incomingSignal: null,
       localStream: null,
       remoteStream: null,
-      peerConnection: null
+      peerConnection: null,
+      isMicOn: true,
+      isVideoOn: true,
+      isScreenSharing: false,
     });
+  },
+
+  // --- NEW FEATURES COMPLETED BELOW ---
+
+  toggleMic: () => {
+    const { localStream, isMicOn } = get();
+    if (localStream) {
+      localStream.getAudioTracks().forEach(track => track.enabled = !isMicOn);
+      set({ isMicOn: !isMicOn });
+    }
+  },
+
+  toggleVideo: () => {
+    const { localStream, isVideoOn } = get();
+    if (localStream) {
+      localStream.getVideoTracks().forEach(track => track.enabled = !isVideoOn);
+      set({ isVideoOn: !isVideoOn });
+    }
+  },
+
+  toggleScreenShare: async () => {
+    const { isScreenSharing, peerConnection, localStream } = get();
+    
+    if (!isScreenSharing) {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const screenTrack = screenStream.getVideoTracks()[0];
+        
+        // Find the video sender and replace the camera track with the screen track
+        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (sender) sender.replaceTrack(screenTrack);
+
+        // Listen for user stopping sharing via native browser UI
+        screenTrack.onended = () => {
+          get().toggleScreenShare(); // Revert safely back to camera
+        };
+
+        set({ isScreenSharing: true });
+      } catch (err) {
+        console.error("Screen sharing failed or cancelled", err);
+      }
+    } else {
+      // Revert back to camera
+      try {
+        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+        const videoTrack = localStream.getVideoTracks()[0];
+        
+        if (sender && videoTrack) {
+          sender.replaceTrack(videoTrack);
+        }
+        set({ isScreenSharing: false });
+      } catch (err) {
+        console.error("Failed to revert to camera", err);
+      }
+    }
   }
 }));
