@@ -1,6 +1,6 @@
 import axios from "axios";
 
 export const axiosInstance = axios.create({
-    baseURL: "https://chatflow-zvul.onrender.com/api",
+    baseURL: import.meta.env.MODE === "development" ? "http://localhost:8080/api" : "/chatflow-api",
     withCredentials: true,
 });
