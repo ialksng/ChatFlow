@@ -26,15 +26,13 @@ app.use(cors({
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
-if (process.env.NODE_ENV === "production") {
-  // FIX 1: Removed "../" because __dirname is already the root of your project
-  app.use(express.static(path.join(__dirname, "client", "dist")));
+// 👇 Removed the "if (production)" wrapper so it always serves the frontend
+app.use(express.static(path.join(__dirname, "client", "dist")));
 
-  app.get(/.*/, (req, res) => {
-    // FIX 1: Also removed "../" here
+// 👇 Changed /.*/ to "*" (the standard Express catch-all method)
+app.get("*", (req, res) => {
     res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
-  });
-};
+});
 
 // FIX 2: Changed app.listen to server.listen so Socket.io works properly
 server.listen(PORT, () => {
