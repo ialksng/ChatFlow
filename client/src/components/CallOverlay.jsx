@@ -18,7 +18,12 @@ const CallOverlay = () => {
   }, [localStream, callState]);
 
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+      // CRITICAL FIX: Explicitly call play(). Browsers sometimes pause media 
+      // automatically if the <video> tag has opacity-0 or is hidden.
+      remoteVideoRef.current.play().catch(e => console.warn("Audio autoplay blocked:", e));
+    }
   }, [remoteStream, callState]);
 
   if (callState === "idle") return null;

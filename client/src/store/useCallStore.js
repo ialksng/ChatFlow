@@ -37,9 +37,16 @@ const getRobustMediaStream = async (mode) => {
   // and screen-share's 'replaceTrack' always has a track to replace!
   if (!hasVideo) {
     const canvas = document.createElement("canvas");
-    canvas.width = 1; canvas.height = 1;
+    canvas.width = 2; 
+    canvas.height = 2;
+    // CRITICAL FIX: Draw a black pixel so the browser actually transmits data. 
+    // An empty canvas can cause WebRTC to freeze the audio track!
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, 2, 2);
+
     const dummyVideo = canvas.captureStream(1).getVideoTracks()[0];
-    dummyVideo.enabled = false; 
+    // CRITICAL FIX: Do NOT set enabled = false. Leave it active so data flows.
     stream.addTrack(dummyVideo);
   }
   
@@ -234,7 +241,7 @@ export const useCallStore = create((set, get) => ({
     }
   },
 
-toggleScreenShare: async () => {
+  toggleScreenShare: async () => {
     const { isScreenSharing, peerConnection, localStream, remoteUserId, callMode, isVideoOn } = get();
     const socket = useAuthStore.getState().socket;
     
@@ -283,9 +290,15 @@ toggleScreenShare: async () => {
         // Fallback for audio calls OR if camera permissions are blocked during revert
         if (!newVideoTrack) {
           const canvas = document.createElement("canvas");
-          canvas.width = 1; canvas.height = 1;
+          canvas.width = 2; // FIX: Ensure canvas has width
+          canvas.height = 2; // FIX: Ensure canvas has height
+          
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "black";
+          ctx.fillRect(0, 0, 2, 2); // FIX: Draw pixel so browser transmits data
+
           newVideoTrack = canvas.captureStream(1).getVideoTracks()[0];
-          newVideoTrack.enabled = false;
+          // FIX: Leave track enabled
         }
 
         const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
