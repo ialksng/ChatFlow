@@ -234,8 +234,8 @@ export const useCallStore = create((set, get) => ({
     }
   },
 
-  toggleScreenShare: async () => {
-    const { isScreenSharing, peerConnection, localStream, remoteUserId } = get();
+toggleScreenShare: async () => {
+    const { isScreenSharing, peerConnection, localStream, remoteUserId, callMode, isVideoOn } = get();
     const socket = useAuthStore.getState().socket;
     
     if (!isScreenSharing) {
@@ -256,18 +256,32 @@ export const useCallStore = create((set, get) => ({
         if (oldVideo) localStream.removeTrack(oldVideo);
         localStream.addTrack(screenTrack);
 
-        screenTrack.onended = () => get().toggleScreenShare();
+        // Bind the native browser "Stop Sharing" button
+        screenTrack.onended = () => {
+          if (get().isScreenSharing) {
+            get().toggleScreenShare();
+          }
+        };
 
         set({ isScreenSharing: true });
       } catch (err) { console.error("Screen sharing failed", err); }
     } else {
       try {
         let newVideoTrack;
-        if (get().callMode === "video") {
-          const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
-          newVideoTrack = camStream.getVideoTracks()[0];
-        } else {
-          // Revert back to dummy track for audio calls
+        
+        try {
+          if (callMode === "video") {
+            const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            newVideoTrack = camStream.getVideoTracks()[0];
+            // Ensure the camera respects the user's previous mute state
+            newVideoTrack.enabled = isVideoOn;
+          }
+        } catch (camErr) {
+          console.error("Failed to restore camera, falling back to dummy track", camErr);
+        }
+
+        // Fallback for audio calls OR if camera permissions are blocked during revert
+        if (!newVideoTrack) {
           const canvas = document.createElement("canvas");
           canvas.width = 1; canvas.height = 1;
           newVideoTrack = canvas.captureStream(1).getVideoTracks()[0];
@@ -282,11 +296,21 @@ export const useCallStore = create((set, get) => ({
         }
 
         const oldVideo = localStream.getVideoTracks()[0];
-        if (oldVideo) { oldVideo.stop(); localStream.removeTrack(oldVideo); }
+        if (oldVideo) { 
+          // CRITICAL FIX: Unbind onended before stopping to prevent race condition loop
+          oldVideo.onended = null; 
+          oldVideo.stop(); 
+          localStream.removeTrack(oldVideo); 
+        }
+        
         if (newVideoTrack) localStream.addTrack(newVideoTrack);
 
         set({ isScreenSharing: false });
-      } catch (err) { console.error("Failed to revert camera", err); }
+      } catch (err) { 
+        console.error("Failed to revert screen share fully", err);
+        // Force UI reset even if background track replacement fails
+        set({ isScreenSharing: false });
+      }
     }
   }
 }));
