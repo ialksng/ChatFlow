@@ -18,6 +18,7 @@ export const useCallStore = create((set, get) => ({
   localStream: null,
   remoteStream: null,
   peerConnection: null,
+  iceCandidateQueue: [], // NEW: Queue for early ICE candidates
 
   // Media States
   isMicOn: true,
@@ -39,17 +40,38 @@ export const useCallStore = create((set, get) => ({
     });
 
     socket.on("call-accepted", async (signal) => {
-      const { peerConnection } = get();
+      const { peerConnection, iceCandidateQueue } = get();
       if (peerConnection && signal) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
+        
+        // Process any ICE candidates that arrived before the remote description was set
+        iceCandidateQueue.forEach(async (candidate) => {
+          try {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (e) {
+            console.error("Error adding queued ICE candidate", e);
+          }
+        });
+        set({ iceCandidateQueue: [] }); // Clear queue
       }
       set({ callState: "active" });
     });
 
     socket.on("ice-candidate", async (candidate) => {
       const { peerConnection } = get();
-      if (peerConnection && candidate) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      
+      // Only add candidate directly if remote description is ready
+      if (peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
+        try {
+          await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.error("Error adding ICE candidate", e);
+        }
+      } else {
+        // Otherwise, queue it up for later
+        set((state) => ({
+          iceCandidateQueue: [...state.iceCandidateQueue, candidate]
+        }));
       }
     });
 
@@ -80,6 +102,7 @@ export const useCallStore = create((set, get) => ({
       isMicOn: true,
       isVideoOn: true,
       isScreenSharing: false,
+      iceCandidateQueue: [], // Reset queue
     });
 
     let stream = null;
@@ -169,6 +192,18 @@ export const useCallStore = create((set, get) => ({
     let answer = null;
     if (callMode !== "draw" && incomingSignal) {
       await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
+      
+      // Process any ICE candidates from the caller that arrived while ringing
+      const { iceCandidateQueue } = get();
+      iceCandidateQueue.forEach(async (candidate) => {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.error("Error adding queued ICE candidate", e);
+        }
+      });
+      set({ iceCandidateQueue: [] }); // Clear queue
+
       answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
     }
@@ -207,6 +242,7 @@ export const useCallStore = create((set, get) => ({
       localStream: null,
       remoteStream: null,
       peerConnection: null,
+      iceCandidateQueue: [], // Reset queue
       isMicOn: true,
       isVideoOn: true,
       isScreenSharing: false,

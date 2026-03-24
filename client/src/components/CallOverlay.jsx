@@ -84,16 +84,23 @@ const CallOverlay = () => {
               <Whiteboard />
             ) : (
               <div className="w-full h-full relative sm:rounded-xl overflow-hidden bg-base-300 sm:border border-base-200">
-                {/* Remote Stream */}
-                {callMode === "audio" ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center animate-pulse gap-4">
+                
+                {/* Remote Stream - Always render the video, just hide it visually if audio call */}
+                <video 
+                  ref={remoteVideoRef} 
+                  autoPlay 
+                  playsInline 
+                  className={`w-full h-full object-cover ${callMode === "audio" ? "hidden" : ""}`} 
+                />
+
+                {/* Audio Call UI Overlay */}
+                {callMode === "audio" && (
+                  <div className="absolute inset-0 z-0 w-full h-full flex flex-col items-center justify-center animate-pulse gap-4 bg-base-300">
                      <div className="w-24 h-24 bg-primary/20 rounded-full flex items-center justify-center">
                         <Phone size={40} className="text-primary" />
                      </div>
                     <span className="text-lg font-medium">{callerName}</span>
                   </div>
-                ) : (
-                  <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
                 )}
                 
                 {callMode === "video" && (
@@ -104,12 +111,20 @@ const CallOverlay = () => {
                 
                 {/* Local Stream (PIP) */}
                 <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 w-24 sm:w-32 md:w-48 aspect-video bg-black rounded-lg sm:rounded-xl overflow-hidden shadow-2xl border-2 border-base-100 z-10">
-                  {callMode === "audio" ? (
-                    <div className="w-full h-full flex items-center justify-center text-xs sm:text-sm text-base-content/50 bg-base-300">
+                  
+                  {/* Local Stream - Always render, hide visually if audio */}
+                  <video 
+                    ref={localVideoRef} 
+                    autoPlay 
+                    playsInline 
+                    muted 
+                    className={`w-full h-full object-cover ${!isScreenSharing && "transform scale-x-[-1]"} ${callMode === "audio" ? "hidden" : ""}`} 
+                  />
+
+                  {callMode === "audio" && (
+                    <div className="absolute inset-0 z-0 w-full h-full flex items-center justify-center text-xs sm:text-sm text-base-content/50 bg-base-300">
                       You
                     </div>
-                  ) : (
-                    <video ref={localVideoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${!isScreenSharing && "transform scale-x-[-1]"}`} />
                   )}
                 </div>
               </div>
