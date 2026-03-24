@@ -73,15 +73,18 @@ export const sendMessage = async (req, res) => {
           io.to(userSocketId).emit("typing", { senderId: receiverId });
         }
 
-        // Fetch the last 10 messages for context
+        // FIX 1: Fetch ONLY the last 4 messages to prevent context anchoring
         const previousMessages = await Message.find({
           $or: [
             { senderId: senderId, receiverId: receiverId },
             { senderId: receiverId, receiverId: senderId },
           ],
         })
-          .sort({ createdAt: 1 })
-          .limit(10);
+          .sort({ createdAt: -1 }) // Sort descending to get newest first
+          .limit(4);
+
+        // Reverse so the AI sees them in standard chronological order
+        previousMessages.reverse();
 
         // Format messages for Groq
         const formattedMessages = previousMessages.map((msg) => ({
@@ -94,11 +97,12 @@ export const sendMessage = async (req, res) => {
           messages: [
             {
               role: "system",
-              content: "You are a highly intelligent, friendly, and concise AI assistant integrated into a chat app called ChatFlow. You act just like a normal user but you are highly knowledgeable. Keep responses relatively short and conversational.",
+              // FIX 2: Extremely strict system prompt about changing topics
+              content: "You are BuddyBot, an AI in the ChatFlow app. Answer concisely. CRITICAL INSTRUCTION: Pay absolute attention to the user's LATEST message. If the user changes the topic, you MUST immediately abandon the previous context and answer the new question directly without referencing the past.",
             },
             ...formattedMessages,
           ],
-          model: "llama-3.3-70b-versatile", // Updated to the newer 3.1 model for better context handling
+          model: "openai/gpt-oss-120b", // Using the highly capable 70B model
           temperature: 0.7,
         });
 
