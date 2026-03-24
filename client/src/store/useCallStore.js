@@ -1,15 +1,62 @@
 import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
 import { useChatStore } from "./useChatStore";
-import toast from "react-hot-toast"; // NEW: For showing permission errors
+import toast from "react-hot-toast";
 
 const servers = {
   iceServers: [{ urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"] }],
 };
 
+// Helper function to guarantee we ALWAYS return a stream, preventing crashes
+const getRobustMediaStream = async (mode) => {
+  let stream = new MediaStream();
+  let hasVideo = false;
+  let hasAudio = false;
+
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      const userStream = await navigator.mediaDevices.getUserMedia({ video: mode === "video", audio: true });
+      userStream.getTracks().forEach(t => stream.addTrack(t));
+      hasVideo = mode === "video";
+      hasAudio = true;
+    } catch (err) {
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioStream.getTracks().forEach(t => stream.addTrack(t));
+        hasAudio = true;
+        toast.error("Camera access failed. Joined with Audio only.");
+      } catch (audioErr) {
+        toast.error("Mic/Camera blocked. You are in listen-only mode.");
+      }
+    }
+  } else {
+    toast.error("Secure connection (HTTPS/localhost) required for Camera/Mic.");
+  }
+
+  // WebRTC Hack: Add dummy silent tracks if missing so the connection succeeds 
+  // and screen-share's 'replaceTrack' always has a track to replace!
+  if (!hasVideo) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1; canvas.height = 1;
+    const dummyVideo = canvas.captureStream(1).getVideoTracks()[0];
+    dummyVideo.enabled = false; 
+    stream.addTrack(dummyVideo);
+  }
+  
+  if (!hasAudio) {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const dest = ctx.createMediaStreamDestination();
+    const dummyAudio = dest.stream.getAudioTracks()[0];
+    dummyAudio.enabled = false;
+    stream.addTrack(dummyAudio);
+  }
+
+  return stream;
+};
+
 export const useCallStore = create((set, get) => ({
-  callState: "idle",
-  callMode: null,
+  callState: "idle", 
+  callMode: null,    
   remoteUserId: null,
   callerName: null,
   incomingSignal: null,
@@ -22,6 +69,7 @@ export const useCallStore = create((set, get) => ({
   isMicOn: true,
   isVideoOn: true,
   isScreenSharing: false,
+  remoteIsScreenSharing: false, // NEW: Track if the remote user is screen sharing
 
   listenToCallEvents: () => {
     const socket = useAuthStore.getState().socket;
@@ -44,6 +92,13 @@ export const useCallStore = create((set, get) => ({
     });
 
     socket.on("ice-candidate", async (candidate) => {
+      // Catch our custom makeshift screen-share signal
+      if (candidate && candidate.type === "CUSTOM_SIGNAL") {
+        if (candidate.action === "SCREEN_SHARE_ON") set({ remoteIsScreenSharing: true });
+        if (candidate.action === "SCREEN_SHARE_OFF") set({ remoteIsScreenSharing: false });
+        return;
+      }
+
       const { peerConnection } = get();
       if (peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
         try { await peerConnection.addIceCandidate(new RTCIceCandidate(candidate)); } catch (e) {}
@@ -71,54 +126,19 @@ export const useCallStore = create((set, get) => ({
     const { authUser, socket } = useAuthStore.getState();
     if (!selectedUser || !socket) return;
 
-    // Check if browser supports media devices (requires HTTPS or localhost)
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      toast.error("Media devices blocked. Ensure you are using HTTPS or localhost.");
-      return;
-    }
-
     set({ 
       callState: "calling", callMode: mode, remoteUserId: selectedUser._id,
       callerName: selectedUser.fullName, isMicOn: true, isVideoOn: true,
-      isScreenSharing: false, iceCandidateQueue: []
+      isScreenSharing: false, remoteIsScreenSharing: false, iceCandidateQueue: [],
     });
 
-    let stream = null;
-    let finalMode = mode;
-
-    if (mode === "video" || mode === "audio") {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: mode === "video", audio: true });
-        set({ localStream: stream });
-      } catch (err) {
-        console.error("Failed to get local stream", err);
-        
-        // If video fails (no webcam on PC), try to fallback to audio automatically
-        if (mode === "video") {
-          toast.error("Camera access failed. Trying audio only...");
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            finalMode = "audio"; // Downgrade mode
-            set({ localStream: stream, callMode: "audio" });
-          } catch (audioErr) {
-            toast.error("Microphone access also failed. Check permissions.");
-            get().endCallUI();
-            return;
-          }
-        } else {
-          toast.error("Microphone access failed. Check permissions.");
-          get().endCallUI();
-          return;
-        }
-      }
-    }
+    let stream = await getRobustMediaStream(mode);
+    set({ localStream: stream });
 
     const pc = new RTCPeerConnection(servers);
     set({ peerConnection: pc });
 
-    if (stream) {
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-    }
+    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
     pc.ontrack = (event) => set({ remoteStream: event.streams[0] });
 
@@ -129,42 +149,31 @@ export const useCallStore = create((set, get) => ({
     };
 
     let offer = null;
-    if (finalMode !== "draw") {
+    if (mode !== "draw") {
       offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
     }
 
     socket.emit("call-user", {
       userToCall: selectedUser._id, from: authUser._id, name: authUser.fullName,
-      mode: finalMode, signalData: offer 
+      mode: mode, signalData: offer 
     });
   },
 
   acceptCall: async () => {
     const { remoteUserId, callMode, incomingSignal } = get();
-    const { socket } = useAuthStore.getState();
+    const socket = useAuthStore.getState().socket;
     if (!socket) return;
 
-    set({ callState: "active", isMicOn: true, isVideoOn: true, isScreenSharing: false });
+    set({ callState: "active", isMicOn: true, isVideoOn: true, isScreenSharing: false, remoteIsScreenSharing: false });
 
-    let stream = null;
-    if (callMode === "video" || callMode === "audio") {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: callMode === "video", audio: true });
-        set({ localStream: stream });
-      } catch (err) {
-        console.error("Failed to get local stream", err);
-        toast.error("Could not access your camera/mic. You can see them, but they can't see you.");
-        // We continue anyway so they can still receive the remote video/audio!
-      }
-    }
+    let stream = await getRobustMediaStream(callMode);
+    set({ localStream: stream });
 
     const pc = new RTCPeerConnection(servers);
     set({ peerConnection: pc });
 
-    if (stream) {
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-    }
+    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
     pc.ontrack = (event) => set({ remoteStream: event.streams[0] });
 
@@ -177,7 +186,6 @@ export const useCallStore = create((set, get) => ({
     let answer = null;
     if (callMode !== "draw" && incomingSignal) {
       await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal));
-      
       const { iceCandidateQueue } = get();
       iceCandidateQueue.forEach(async (candidate) => {
         try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch (e) {}
@@ -206,7 +214,7 @@ export const useCallStore = create((set, get) => ({
     set({ 
       callState: "idle", callMode: null, remoteUserId: null, callerName: null,
       incomingSignal: null, localStream: null, remoteStream: null, peerConnection: null,
-      iceCandidateQueue: [], isMicOn: true, isVideoOn: true, isScreenSharing: false,
+      iceCandidateQueue: [], isMicOn: true, isVideoOn: true, isScreenSharing: false, remoteIsScreenSharing: false,
     });
   },
 
@@ -227,24 +235,58 @@ export const useCallStore = create((set, get) => ({
   },
 
   toggleScreenShare: async () => {
-    const { isScreenSharing, peerConnection, localStream } = get();
+    const { isScreenSharing, peerConnection, localStream, remoteUserId } = get();
+    const socket = useAuthStore.getState().socket;
+    
     if (!isScreenSharing) {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const screenTrack = screenStream.getVideoTracks()[0];
+        
         const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (sender) sender.replaceTrack(screenTrack);
+        if (sender) await sender.replaceTrack(screenTrack);
+
+        // Signal the remote user's UI to make the video visible
+        if (socket && remoteUserId) {
+          socket.emit("ice-candidate", { to: remoteUserId, candidate: { type: "CUSTOM_SIGNAL", action: "SCREEN_SHARE_ON" }});
+        }
+
+        // Swap out local UI preview
+        const oldVideo = localStream.getVideoTracks()[0];
+        if (oldVideo) localStream.removeTrack(oldVideo);
+        localStream.addTrack(screenTrack);
 
         screenTrack.onended = () => get().toggleScreenShare();
+
         set({ isScreenSharing: true });
-      } catch (err) { console.error("Screen sharing failed or cancelled", err); }
+      } catch (err) { console.error("Screen sharing failed", err); }
     } else {
       try {
+        let newVideoTrack;
+        if (get().callMode === "video") {
+          const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          newVideoTrack = camStream.getVideoTracks()[0];
+        } else {
+          // Revert back to dummy track for audio calls
+          const canvas = document.createElement("canvas");
+          canvas.width = 1; canvas.height = 1;
+          newVideoTrack = canvas.captureStream(1).getVideoTracks()[0];
+          newVideoTrack.enabled = false;
+        }
+
         const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (sender && videoTrack) sender.replaceTrack(videoTrack);
+        if (sender && newVideoTrack) await sender.replaceTrack(newVideoTrack);
+        
+        if (socket && remoteUserId) {
+          socket.emit("ice-candidate", { to: remoteUserId, candidate: { type: "CUSTOM_SIGNAL", action: "SCREEN_SHARE_OFF" }});
+        }
+
+        const oldVideo = localStream.getVideoTracks()[0];
+        if (oldVideo) { oldVideo.stop(); localStream.removeTrack(oldVideo); }
+        if (newVideoTrack) localStream.addTrack(newVideoTrack);
+
         set({ isScreenSharing: false });
-      } catch (err) { console.error("Failed to revert to camera", err); }
+      } catch (err) { console.error("Failed to revert camera", err); }
     }
   }
 }));

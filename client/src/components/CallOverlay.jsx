@@ -6,7 +6,7 @@ import { X, Phone, Video, Mic, MicOff, Video as VideoIcon, VideoOff, MonitorUp }
 const CallOverlay = () => {
   const { 
     callState, callMode, callerName, localStream, remoteStream, 
-    acceptCall, rejectCall, isMicOn, isVideoOn, isScreenSharing, 
+    acceptCall, rejectCall, isMicOn, isVideoOn, isScreenSharing, remoteIsScreenSharing,
     toggleMic, toggleVideo, toggleScreenShare 
   } = useCallStore();
   
@@ -14,18 +14,18 @@ const CallOverlay = () => {
   const remoteVideoRef = useRef(null);
 
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
-    }
+    if (localVideoRef.current && localStream) localVideoRef.current.srcObject = localStream;
   }, [localStream, callState]);
 
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-    }
+    if (remoteVideoRef.current && remoteStream) remoteVideoRef.current.srcObject = remoteStream;
   }, [remoteStream, callState]);
 
   if (callState === "idle") return null;
+
+  // Determine visibility states based on screenshare logic
+  const showRemoteVideo = callMode === "video" || remoteIsScreenSharing;
+  const showLocalVideo = (callMode === "video" && isVideoOn) || isScreenSharing;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm sm:p-4">
@@ -65,7 +65,7 @@ const CallOverlay = () => {
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-success"></span>
               </span>
               <h2 className="font-semibold text-base sm:text-lg capitalize truncate max-w-[200px] sm:max-w-none">
-                {callMode} with {callerName}
+                {remoteIsScreenSharing ? "Viewing Screen" : `${callMode} with ${callerName}`}
               </h2>
             </div>
             {callMode === "draw" && (
@@ -81,17 +81,16 @@ const CallOverlay = () => {
             ) : (
               <div className="w-full h-full relative sm:rounded-xl overflow-hidden bg-base-300 sm:border border-base-200">
                 
-                {/* FIX: Replaced "hidden" with "opacity-0 absolute -z-10".
-                  This prevents the browser from pausing the audio!
-                */}
+                {/* Remote Stream Video */}
                 <video 
                   ref={remoteVideoRef} 
                   autoPlay 
                   playsInline 
-                  className={`w-full h-full object-cover ${callMode === "audio" ? "opacity-0 absolute inset-0 pointer-events-none -z-10" : ""}`} 
+                  className={`w-full h-full object-cover ${!showRemoteVideo ? "opacity-0 absolute inset-0 pointer-events-none -z-10" : ""}`} 
                 />
 
-                {callMode === "audio" && (
+                {/* Audio-only Placeholder (Hides if screen sharing starts) */}
+                {!showRemoteVideo && (
                   <div className="absolute inset-0 z-0 w-full h-full flex flex-col items-center justify-center animate-pulse gap-4 bg-base-300">
                      <div className="w-24 h-24 bg-primary/20 rounded-full flex items-center justify-center">
                         <Phone size={40} className="text-primary" />
@@ -100,7 +99,7 @@ const CallOverlay = () => {
                   </div>
                 )}
                 
-                {callMode === "video" && (
+                {showRemoteVideo && (
                   <div className="absolute bottom-4 left-4 bg-black/60 px-3 py-1 rounded-md text-white text-xs sm:text-sm">
                     {callerName}
                   </div>
@@ -109,16 +108,17 @@ const CallOverlay = () => {
                 {/* Local Stream (PIP) */}
                 <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 w-24 sm:w-32 md:w-48 aspect-video bg-black rounded-lg sm:rounded-xl overflow-hidden shadow-2xl border-2 border-base-100 z-10">
                   
-                  {/* FIX: Hide local video frame if camera is toggled off */}
+                  {/* Local Stream Video */}
                   <video 
                     ref={localVideoRef} 
                     autoPlay 
                     playsInline 
                     muted 
-                    className={`w-full h-full object-cover ${!isScreenSharing && "transform scale-x-[-1]"} ${(callMode === "audio" || !isVideoOn) ? "opacity-0 absolute inset-0 pointer-events-none -z-10" : ""}`} 
+                    className={`w-full h-full object-cover ${!isScreenSharing && "transform scale-x-[-1]"} ${!showLocalVideo ? "opacity-0 absolute inset-0 pointer-events-none -z-10" : ""}`} 
                   />
 
-                  {(callMode === "audio" || !isVideoOn) && (
+                  {/* Camera-Off Placeholder */}
+                  {!showLocalVideo && (
                     <div className="absolute inset-0 z-0 w-full h-full flex items-center justify-center text-xs sm:text-sm text-base-content/50 bg-base-300">
                       {callMode === "audio" ? "You" : <VideoOff className="size-6 opacity-60" />}
                     </div>
@@ -130,31 +130,17 @@ const CallOverlay = () => {
 
           {(callMode === "video" || callMode === "audio") && (
             <div className="p-3 sm:p-4 bg-base-200/50 flex flex-wrap items-center justify-center gap-2 sm:gap-4 border-t border-base-300">
-              <button 
-                onClick={toggleMic} 
-                className={`btn btn-circle btn-sm sm:btn-md ${isMicOn ? "btn-neutral" : "btn-error text-white"}`}
-              >
+              <button onClick={toggleMic} className={`btn btn-circle btn-sm sm:btn-md ${isMicOn ? "btn-neutral" : "btn-error text-white"}`}>
                 {isMicOn ? <Mic className="size-4 sm:size-5" /> : <MicOff className="size-4 sm:size-5" />}
               </button>
               
-              {callMode === "video" && (
-                <>
-                  <button 
-                    onClick={toggleVideo} 
-                    className={`btn btn-circle btn-sm sm:btn-md ${isVideoOn ? "btn-neutral" : "btn-error text-white"}`}
-                  >
-                    {isVideoOn ? <VideoIcon className="size-4 sm:size-5" /> : <VideoOff className="size-4 sm:size-5" />}
-                  </button>
+              <button onClick={toggleVideo} className={`btn btn-circle btn-sm sm:btn-md ${isVideoOn ? "btn-neutral" : "btn-error text-white"}`}>
+                {isVideoOn ? <VideoIcon className="size-4 sm:size-5" /> : <VideoOff className="size-4 sm:size-5" />}
+              </button>
 
-                  <button 
-                    onClick={toggleScreenShare} 
-                    className={`btn btn-circle btn-sm sm:btn-md ${isScreenSharing ? "btn-primary text-white" : "btn-neutral"}`}
-                    title="Share Screen"
-                  >
-                    <MonitorUp className="size-4 sm:size-5" />
-                  </button>
-                </>
-              )}
+              <button onClick={toggleScreenShare} className={`btn btn-circle btn-sm sm:btn-md ${isScreenSharing ? "btn-primary text-white" : "btn-neutral"}`} title="Share Screen">
+                <MonitorUp className="size-4 sm:size-5" />
+              </button>
 
               <button onClick={rejectCall} className="btn btn-error btn-sm sm:btn-md px-6 sm:px-8 rounded-full text-white font-medium ml-2 sm:ml-4">
                 End
