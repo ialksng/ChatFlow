@@ -1,8 +1,11 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
-
 import cloudinary from "../lib/cloudinary.js";
 import { getReceiverSocketId, io } from "../lib/socket.js";
+import Groq from "groq-sdk";
+
+// Initialize Groq Client
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export const getUsersForSidebar = async (req, res) => {
   try {
@@ -43,28 +46,83 @@ export const sendMessage = async (req, res) => {
 
     let imageUrl;
     if (image) {
-      // Upload base64 image to cloudinary
       const uploadResponse = await cloudinary.uploader.upload(image);
       imageUrl = uploadResponse.secure_url;
     }
 
+    // 1. Save the User's Message
     const newMessage = new Message({
       senderId,
       receiverId,
       text,
       image: imageUrl,
     });
-
     await newMessage.save();
 
-    const receiverSocketId = getReceiverSocketId(receiverId);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("newMessage", newMessage);
-    }
-
+    // 2. Respond to client immediately with their own message
     res.status(201).json(newMessage);
+
+    // 3. Check if the receiver is the AI User
+    if (receiverId === process.env.AI_USER_ID) {
+      // Fetch the last 10 messages for context
+      const previousMessages = await Message.find({
+        $or: [
+          { senderId: senderId, receiverId: receiverId },
+          { senderId: receiverId, receiverId: senderId },
+        ],
+      })
+        .sort({ createdAt: 1 })
+        .limit(10);
+
+      // Format messages for Groq
+      const formattedMessages = previousMessages.map((msg) => ({
+        role: msg.senderId.toString() === senderId.toString() ? "user" : "assistant",
+        content: msg.text || (msg.image ? "[User sent an image]" : ""),
+      }));
+
+      try {
+        // Call Groq API
+        const chatCompletion = await groq.chat.completions.create({
+          messages: [
+            {
+              role: "system",
+              content: "You are a helpful, concise AI assistant integrated into a real-time chat application called ChatFlow. Respond naturally like a friend.",
+            },
+            ...formattedMessages,
+          ],
+          model: "llama3-8b-8192", // Highly recommend Llama 3 for fast, smart chat
+        });
+
+        const aiResponseText = chatCompletion.choices[0]?.message?.content || "Sorry, I encountered an error thinking about that.";
+
+        // Save AI's response to the database
+        const aiMessage = new Message({
+          senderId: receiverId, // AI is the sender
+          receiverId: senderId, // User is the receiver
+          text: aiResponseText,
+        });
+        await aiMessage.save();
+
+        // Emit AI's message to the user via Socket.io
+        const userSocketId = getReceiverSocketId(senderId);
+        if (userSocketId) {
+          io.to(userSocketId).emit("newMessage", aiMessage);
+        }
+      } catch (aiError) {
+        console.error("Groq AI processing error: ", aiError.message);
+      }
+    } else {
+      // 4. Standard User-to-User routing via Socket.io
+      const receiverSocketId = getReceiverSocketId(receiverId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("newMessage", newMessage);
+      }
+    }
   } catch (error) {
     console.log("Error in sendMessage controller: ", error.message);
-    res.status(500).json({ error: "Internal server error" });
+    // Note: Only send 500 if we haven't already sent the 201 response above
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error" });
+    }
   }
 };
