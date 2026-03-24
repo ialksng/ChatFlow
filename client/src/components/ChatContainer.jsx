@@ -121,7 +121,7 @@ const ChatContainer = () => {
               <div className="chat-image avatar">
                 <div className="size-10 rounded-full border">
                   <img
-                    src={isMine ? authUser.profilePic || "avatar.png" : selectedUser.profilePic || "/avatar.png"}
+                    src={isMine ? authUser.profilePic || "/avatar.png" : selectedUser.profilePic || "/avatar.png"}
                     alt="profile pic"
                   />
                 </div>
@@ -267,7 +267,7 @@ const ChatContainer = () => {
             <div className="chat-image avatar">
               <div className="size-10 rounded-full border">
                   <img
-                    src={isMine ? authUser.profilePic || "avatar.png" : selectedUser.profilePic || "/avatar.png"}
+                    src={isMine ? authUser.profilePic || "/avatar.png" : selectedUser.profilePic || "/avatar.png"}
                     alt="profile pic"
                   />
               </div>

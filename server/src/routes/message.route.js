@@ -13,9 +13,9 @@ import {
 const router = express.Router();
 
 router.get("/users", protectRoute, getUsersForSidebar);
+router.get("/turn", protectRoute, getTurnCredentials);
 router.get("/:id", protectRoute, getMessages);
 router.post("/send/:id", protectRoute, sendMessage);
-router.get("/turn", protectRoute, getTurnCredentials);
 
 // NEW ENDPOINTS
 router.delete("/delete/:id", protectRoute, deleteMessage);
