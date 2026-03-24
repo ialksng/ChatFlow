@@ -130,17 +130,24 @@ const CallOverlay = () => {
 
           {(callMode === "video" || callMode === "audio") && (
             <div className="p-3 sm:p-4 bg-base-200/50 flex flex-wrap items-center justify-center gap-2 sm:gap-4 border-t border-base-300">
+              
+              {/* Mic Toggle (Always visible) */}
               <button onClick={toggleMic} className={`btn btn-circle btn-sm sm:btn-md ${isMicOn ? "btn-neutral" : "btn-error text-white"}`}>
                 {isMicOn ? <Mic className="size-4 sm:size-5" /> : <MicOff className="size-4 sm:size-5" />}
               </button>
               
-              <button onClick={toggleVideo} className={`btn btn-circle btn-sm sm:btn-md ${isVideoOn ? "btn-neutral" : "btn-error text-white"}`}>
-                {isVideoOn ? <VideoIcon className="size-4 sm:size-5" /> : <VideoOff className="size-4 sm:size-5" />}
-              </button>
+              {/* Video and Screen Share Toggles (ONLY visible for Video calls) */}
+              {callMode === "video" && (
+                <>
+                  <button onClick={toggleVideo} className={`btn btn-circle btn-sm sm:btn-md ${isVideoOn ? "btn-neutral" : "btn-error text-white"}`}>
+                    {isVideoOn ? <VideoIcon className="size-4 sm:size-5" /> : <VideoOff className="size-4 sm:size-5" />}
+                  </button>
 
-              <button onClick={toggleScreenShare} className={`btn btn-circle btn-sm sm:btn-md ${isScreenSharing ? "btn-primary text-white" : "btn-neutral"}`} title="Share Screen">
-                <MonitorUp className="size-4 sm:size-5" />
-              </button>
+                  <button onClick={toggleScreenShare} className={`btn btn-circle btn-sm sm:btn-md ${isScreenSharing ? "btn-primary text-white" : "btn-neutral"}`} title="Share Screen">
+                    <MonitorUp className="size-4 sm:size-5" />
+                  </button>
+                </>
+              )}
 
               <button onClick={rejectCall} className="btn btn-error btn-sm sm:btn-md px-6 sm:px-8 rounded-full text-white font-medium ml-2 sm:ml-4">
                 End
