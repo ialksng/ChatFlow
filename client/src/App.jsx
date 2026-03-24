@@ -10,24 +10,36 @@ import CallOverlay from "./components/CallOverlay";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/useAuthStore";
 import { useThemeStore } from "./store/useThemeStore";
+import { useCallStore } from "./store/useCallStore"; // 👈 Import call store
 import { useEffect } from "react";
 
 import { Loader } from "lucide-react";
 import { Toaster } from "react-hot-toast";
 
 const App = () => {
-  const { authUser, checkAuth, isCheckingAuth, onlineUsers } = useAuthStore(); 
+  const { authUser, checkAuth, isCheckingAuth } = useAuthStore(); 
   const { theme } = useThemeStore();
+  const { listenToCallEvents, stopListeningToCallEvents } = useCallStore(); // 👈 Extract call events
   
+  // Check Authentication on mount
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
+  // Apply Theme
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  console.log({authUser});
+  // 🌟 Listen to incoming WebRTC calls when the user is logged in
+  useEffect(() => {
+    if (authUser) {
+      listenToCallEvents();
+    }
+    return () => {
+      stopListeningToCallEvents();
+    };
+  }, [authUser, listenToCallEvents, stopListeningToCallEvents]);
 
   if (isCheckingAuth && !authUser) return (
     <div className="flex items-center justify-center h-screen">
@@ -38,7 +50,9 @@ const App = () => {
   return (
     <div>
       <Navbar />
-      <CallOverlay />
+      
+      {/* 🌟 Only render the Call Overlay if the user is logged in */}
+      {authUser && <CallOverlay />}
 
       <Routes>
         <Route path="/" element={authUser ? <HomePage /> : <Navigate to="/login" />} />
@@ -50,7 +64,7 @@ const App = () => {
 
       <Toaster />
     </div>
-  )
-}
+  );
+};
 
-export default App
+export default App;
