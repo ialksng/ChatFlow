@@ -6,7 +6,8 @@ import {
   sendMessage,
   deleteMessage,
   editMessage,
-  reactToMessage
+  reactToMessage,
+  getTurnCredentials
 } from "../controllers/message.controller.js";
 
 const router = express.Router();
@@ -14,6 +15,7 @@ const router = express.Router();
 router.get("/users", protectRoute, getUsersForSidebar);
 router.get("/:id", protectRoute, getMessages);
 router.post("/send/:id", protectRoute, sendMessage);
+router.get("/turn", protectRoute, getTurnCredentials);
 
 // NEW ENDPOINTS
 router.delete("/delete/:id", protectRoute, deleteMessage);

@@ -2,10 +2,7 @@ import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
 import { useChatStore } from "./useChatStore";
 import toast from "react-hot-toast";
-
-const servers = {
-  iceServers: [{ urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"] }],
-};
+import { axiosInstance } from "../lib/axios";
 
 // Helper function to guarantee we ALWAYS return a stream, preventing crashes
 const getRobustMediaStream = async (mode) => {
@@ -76,7 +73,21 @@ export const useCallStore = create((set, get) => ({
   isMicOn: true,
   isVideoOn: true,
   isScreenSharing: false,
-  remoteIsScreenSharing: false, // NEW: Track if the remote user is screen sharing
+  remoteIsScreenSharing: false, 
+
+  iceServers: null, // Cache them so we don't fetch from Twilio repeatedly
+
+  fetchIceServers: async () => {
+    if (get().iceServers) return { iceServers: get().iceServers };
+    try {
+      const res = await axiosInstance.get("/messages/turn");
+      set({ iceServers: res.data });
+      return { iceServers: res.data };
+    } catch (error) {
+      console.error("Failed to fetch TURN servers, using STUN fallback", error);
+      return { iceServers: [{ urls: ["stun:stun1.l.google.com:19302"] }] };
+    }
+  },
 
   listenToCallEvents: () => {
     const socket = useAuthStore.getState().socket;
@@ -142,7 +153,8 @@ export const useCallStore = create((set, get) => ({
     let stream = await getRobustMediaStream(mode);
     set({ localStream: stream });
 
-    const pc = new RTCPeerConnection(servers);
+    const turnServers = await get().fetchIceServers();
+    const pc = new RTCPeerConnection(turnServers);
     set({ peerConnection: pc });
 
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
@@ -177,7 +189,8 @@ export const useCallStore = create((set, get) => ({
     let stream = await getRobustMediaStream(callMode);
     set({ localStream: stream });
 
-    const pc = new RTCPeerConnection(servers);
+    const turnServers = await get().fetchIceServers();
+    const pc = new RTCPeerConnection(turnServers);
     set({ peerConnection: pc });
 
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));

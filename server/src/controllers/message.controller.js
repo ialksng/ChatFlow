@@ -3,6 +3,7 @@ import Message from "../models/message.model.js";
 import cloudinary from "../lib/cloudinary.js";
 import { getReceiverSocketId, io } from "../lib/socket.js";
 import Groq from "groq-sdk";
+import twilio from "twilio";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
@@ -224,5 +225,17 @@ export const reactToMessage = async (req, res) => {
   } catch (error) {
     console.log("Error in reactToMessage: ", error.message);
     res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getTurnCredentials = async (req, res) => {
+  try {
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    const token = await client.tokens.create();
+    res.status(200).json(token.iceServers);
+  } catch (error) {
+    console.error("Twilio error:", error.message);
+    // Fallback to free STUN if Twilio fails
+    res.status(500).json([{ urls: ["stun:stun1.l.google.com:19302"] }]);
   }
 };
