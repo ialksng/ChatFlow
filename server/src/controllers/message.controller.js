@@ -98,7 +98,7 @@ export const sendMessage = async (req, res) => {
             },
             ...formattedMessages,
           ],
-          model: "llama3-8b-8192", // Updated to the newer 3.1 model for better context handling
+          model: "llama-3.3-70b-versatile", // Updated to the newer 3.1 model for better context handling
           temperature: 0.7,
         });
 
