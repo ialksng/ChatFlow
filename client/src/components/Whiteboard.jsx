@@ -13,9 +13,10 @@ const Whiteboard = () => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     
-    // Size it to its container
-    canvas.width = canvas.parentElement.clientWidth;
-    canvas.height = canvas.parentElement.clientHeight;
+    // 1. FIXED INTERNAL RESOLUTION: Everyone uses a 1000x1000 coordinate map
+    // regardless of their physical screen size.
+    canvas.width = 1000;
+    canvas.height = 1000;
 
     const onReceiveDraw = (data) => {
       const { x0, y0, x1, y1, color } = data;
@@ -31,7 +32,8 @@ const Whiteboard = () => {
     ctx.moveTo(x0, y0);
     ctx.lineTo(x1, y1);
     ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
+    // Made the line slightly thicker since internal resolution is large
+    ctx.lineWidth = 4; 
     ctx.lineCap = "round";
     ctx.stroke();
     ctx.closePath();
@@ -43,16 +45,27 @@ const Whiteboard = () => {
     });
   };
 
-  // 🌟 Helper to get exact coordinates for BOTH Mouse and Touch
+  // 2. SCALED COORDINATES: Translate screen pixels to the 1000x1000 map
   const getCoordinates = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    
+    // Find the scale difference between DOM size and internal resolution
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     if (e.touches && e.touches.length > 0) {
-      const rect = canvasRef.current.getBoundingClientRect();
       return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top) * scaleY
       };
     }
-    return { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
+    
+    // For mouse events, nativeEvent offsets are most accurate
+    return { 
+      x: e.nativeEvent.offsetX * scaleX, 
+      y: e.nativeEvent.offsetY * scaleY 
+    };
   };
 
   const startDrawing = (e) => {
@@ -73,18 +86,29 @@ const Whiteboard = () => {
 
   return (
     <div className="w-full h-full bg-base-300 rounded-none sm:rounded-xl overflow-hidden shadow-lg border-0 sm:border border-base-100 flex flex-col">
-      <div className="p-2 bg-base-200 text-center font-semibold text-sm">Shared Whiteboard</div>
-      <div className="flex-1 cursor-crosshair">
+      <div className="p-2 bg-base-200 text-center font-semibold text-sm flex-none">
+        Shared Whiteboard
+      </div>
+      
+      {/* Container centers the canvas */}
+      <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
         <canvas
           ref={canvasRef}
           onMouseDown={startDrawing}
           onMouseMove={draw}
           onMouseUp={stopDrawing}
           onMouseOut={stopDrawing}
-          onTouchStart={startDrawing} // 📱 Touch Support
-          onTouchMove={draw}          // 📱 Touch Support
-          onTouchEnd={stopDrawing}    // 📱 Touch Support
-          className="block w-full h-full touch-none"
+          onTouchStart={startDrawing} 
+          onTouchMove={draw}          
+          onTouchEnd={stopDrawing}    
+          className="bg-black/50 shadow-xl touch-none cursor-crosshair sm:rounded-md border border-base-100"
+          style={{
+            // 3. FORCE SQUARE: Guarantees the canvas shapes never distort 
+            // between landscape (PC) and portrait (Mobile) screens.
+            aspectRatio: '1 / 1',
+            maxWidth: '100%',
+            maxHeight: '100%',
+          }}
         />
       </div>
     </div>
