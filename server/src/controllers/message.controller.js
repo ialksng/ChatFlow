@@ -67,7 +67,7 @@ export const sendMessage = async (req, res) => {
 
     if (receiverId === process.env.AI_USER_ID) {
       // ... [Keep your existing AI logic here exactly as is] ...
-      const userSocketId = getReceiverSocketId(senderId);
+      const userSocketId = getReceiverSocketId(senderId.toString()); // FIXED
       try {
         if (userSocketId) io.to(userSocketId).emit("typing", { senderId: receiverId });
         
@@ -89,7 +89,7 @@ export const sendMessage = async (req, res) => {
             { role: "system", content: "You are BuddyBot in the ChatFlow app. CRITICAL INSTRUCTION: You suffer from extreme context blindness. You MUST base your entire response ONLY on the user's very last message. If the user changes topics, completely ignore the previous messages. Be concise and friendly." },
             ...formattedMessages,
           ],
-          model: "openai/gpt-oss-120b",
+          model: "openai/gpt-oss-120b", 
           temperature: 0.7,
         });
 
@@ -107,7 +107,7 @@ export const sendMessage = async (req, res) => {
         if (userSocketId) io.to(userSocketId).emit("stopTyping", { senderId: receiverId });
       }
     } else {
-      const receiverSocketId = getReceiverSocketId(receiverId);
+      const receiverSocketId = getReceiverSocketId(receiverId.toString()); // FIXED
       if (receiverSocketId) {
         io.to(receiverSocketId).emit("newMessage", newMessage);
       }
@@ -142,7 +142,7 @@ export const deleteMessage = async (req, res) => {
     res.status(200).json(message);
 
     // Notify receiver
-    const receiverSocketId = getReceiverSocketId(message.receiverId);
+    const receiverSocketId = getReceiverSocketId(message.receiverId.toString()); // FIXED
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("messageUpdated", message);
     }
@@ -173,7 +173,7 @@ export const editMessage = async (req, res) => {
     res.status(200).json(message);
 
     // Notify receiver
-    const receiverSocketId = getReceiverSocketId(message.receiverId);
+    const receiverSocketId = getReceiverSocketId(message.receiverId.toString()); // FIXED
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("messageUpdated", message);
     }
@@ -214,7 +214,7 @@ export const reactToMessage = async (req, res) => {
     
     // Determine the other user in the chat to notify them
     const otherUserId = message.senderId.toString() === userId.toString() ? message.receiverId : message.senderId;
-    const otherUserSocketId = getReceiverSocketId(otherUserId);
+    const otherUserSocketId = getReceiverSocketId(otherUserId.toString()); // FIXED
     
     res.status(200).json(message);
 

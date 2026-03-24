@@ -1,14 +1,48 @@
 import { useChatStore } from "../store/useChatStore";
 import { useEffect, useRef, useState } from "react";
-import { Reply, Edit2, Trash2, SmilePlus, X, Check, Ban } from "lucide-react";
+import { Reply, Edit2, Trash2, SmilePlus, X, Check, Ban, Copy } from "lucide-react";
 
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
 import MessageSkeleton from "./skeletons/MessageSkeleton";
 import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
+import ReactMarkdown from "react-markdown";
 
 const EMOJIS = ["👍", "❤️", "😂", "😮", "😢"];
+
+// Custom component to wrap code blocks with a Copy button
+const CustomPre = ({ children, ...props }) => {
+  const [copied, setCopied] = useState(false);
+  
+  // ReactMarkdown passes the <code> element as a child of <pre>
+  const codeString = children?.props?.children;
+
+  const handleCopy = () => {
+    if (codeString) {
+      navigator.clipboard.writeText(String(codeString).replace(/\n$/, ""));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000); // Revert back to copy icon after 2s
+    }
+  };
+
+  return (
+    <div className="relative group my-2">
+      <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <button
+          onClick={handleCopy}
+          className="btn btn-xs btn-ghost btn-square bg-base-300/80 hover:bg-base-200 text-base-content border border-base-100"
+          title="Copy code"
+        >
+          {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+        </button>
+      </div>
+      <pre className="bg-black/20 p-4 pt-10 rounded-xl overflow-x-auto text-xs border border-base-300" {...props}>
+        {children}
+      </pre>
+    </div>
+  );
+};
 
 const ChatContainer = () => {
   const {
@@ -142,7 +176,35 @@ const ChatContainer = () => {
                       {message.image && (
                         <img src={message.image} alt="Attachment" className="sm:max-w-[200px] rounded-md mb-2" />
                       )}
-                      {message.text && <p>{message.text}</p>}
+                      
+                      {message.text && (
+                        <ReactMarkdown
+                          className="text-sm flex flex-col gap-2"
+                          components={{
+                            p: ({ node, ...props }) => <p {...props} />,
+                            pre: CustomPre,
+                            code: ({ node, inline, className, children, ...props }) => {
+                              // Distinguish between block code (has language class) and inline code
+                              const match = /language-(\w+)/.exec(className || "");
+                              return !match && inline !== false ? (
+                                <code className="bg-black/20 text-primary px-1.5 py-0.5 rounded-md font-mono text-xs" {...props}>
+                                  {children}
+                                </code>
+                              ) : (
+                                <code className={`${className || ""} block font-mono text-base-content`} {...props}>
+                                  {children}
+                                </code>
+                              );
+                            },
+                            ul: ({ node, ...props }) => <ul className="list-disc ml-5 space-y-1" {...props} />,
+                            ol: ({ node, ...props }) => <ol className="list-decimal ml-5 space-y-1" {...props} />,
+                            strong: ({ node, ...props }) => <strong className="font-bold text-primary" {...props} />,
+                          }}
+                        >
+                          {message.text}
+                        </ReactMarkdown>
+                      )}
+
                     </>
                   )}
                 </div>
