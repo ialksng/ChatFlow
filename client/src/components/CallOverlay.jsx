@@ -28,11 +28,12 @@ const CallOverlay = () => {
   if (callState === "idle") return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+    // 📱 Removed padding on mobile, added it back on sm: screens
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm sm:p-4">
       
       {/* 1. Incoming Call UI */}
       {callState === "receiving" && (
-        <div className="bg-base-100 p-8 rounded-2xl flex flex-col items-center shadow-2xl min-w-[300px]">
+        <div className="bg-base-100 p-8 rounded-2xl flex flex-col items-center shadow-2xl w-[90%] max-w-sm">
           <div className="bg-primary/20 p-4 rounded-full mb-4 animate-pulse">
             {callMode === 'video' ? <Video size={32} className="text-primary"/> : <Phone size={32} className="text-primary" />}
           </div>
@@ -47,7 +48,7 @@ const CallOverlay = () => {
 
       {/* 2. Outgoing Call UI */}
       {callState === "calling" && (
-        <div className="bg-base-100 p-8 rounded-2xl flex flex-col items-center shadow-2xl min-w-[300px]">
+        <div className="bg-base-100 p-8 rounded-2xl flex flex-col items-center shadow-2xl w-[90%] max-w-sm">
           <h2 className="text-xl font-bold mb-1">Calling {callerName}...</h2>
           <p className="mb-6 text-base-content/70">Waiting for answer...</p>
           <button onClick={rejectCall} className="btn btn-error w-full text-white">Cancel</button>
@@ -56,17 +57,18 @@ const CallOverlay = () => {
 
       {/* 3. Active UI */}
       {callState === "active" && (
-        <div className="flex flex-col w-full h-[90vh] max-w-6xl mx-auto bg-base-100 rounded-2xl overflow-hidden shadow-2xl">
+        // 📱 Full height and width on mobile, rounded only on larger screens
+        <div className="flex flex-col w-full h-full sm:h-[90vh] max-w-6xl mx-auto bg-base-100 sm:rounded-2xl overflow-hidden shadow-2xl">
           
           {/* Header */}
-          <div className="flex items-center justify-between p-4 bg-base-200/50 border-b border-base-300">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between p-3 sm:p-4 bg-base-200/50 border-b border-base-300">
+            <div className="flex items-center gap-2 sm:gap-3">
               <span className="relative flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-success"></span>
               </span>
-              <h2 className="font-semibold text-lg capitalize">
-                {callMode} Session with {callerName}
+              <h2 className="font-semibold text-base sm:text-lg capitalize truncate max-w-[200px] sm:max-w-none">
+                {callMode} with {callerName}
               </h2>
             </div>
             {callMode === "draw" && (
@@ -77,28 +79,33 @@ const CallOverlay = () => {
           </div>
 
           {/* Main Area */}
-          <div className="flex-1 p-4 bg-base-100 relative overflow-hidden flex">
+          <div className="flex-1 sm:p-4 bg-base-100 relative overflow-hidden flex">
             {callMode === "draw" ? (
               <Whiteboard />
             ) : (
-              <div className="w-full h-full relative rounded-xl overflow-hidden bg-base-300 border border-base-200">
+              <div className="w-full h-full relative sm:rounded-xl overflow-hidden bg-base-300 sm:border border-base-200">
                 {/* Remote Stream */}
                 {callMode === "audio" ? (
-                  <div className="w-full h-full flex items-center justify-center text-xl animate-pulse">
-                    Audio Call Connected...
+                  <div className="w-full h-full flex flex-col items-center justify-center animate-pulse gap-4">
+                     <div className="w-24 h-24 bg-primary/20 rounded-full flex items-center justify-center">
+                        <Phone size={40} className="text-primary" />
+                     </div>
+                    <span className="text-lg font-medium">{callerName}</span>
                   </div>
                 ) : (
                   <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
                 )}
                 
-                <div className="absolute bottom-4 left-4 bg-black/60 px-3 py-1 rounded-md text-white text-sm">
-                  {callerName}
-                </div>
+                {callMode === "video" && (
+                  <div className="absolute bottom-4 left-4 bg-black/60 px-3 py-1 rounded-md text-white text-xs sm:text-sm">
+                    {callerName}
+                  </div>
+                )}
                 
                 {/* Local Stream (PIP) */}
-                <div className="absolute bottom-6 right-6 w-32 md:w-48 aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border-2 border-base-100">
+                <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 w-24 sm:w-32 md:w-48 aspect-video bg-black rounded-lg sm:rounded-xl overflow-hidden shadow-2xl border-2 border-base-100 z-10">
                   {callMode === "audio" ? (
-                    <div className="w-full h-full flex items-center justify-center text-sm text-base-content/50 bg-base-300">
+                    <div className="w-full h-full flex items-center justify-center text-xs sm:text-sm text-base-content/50 bg-base-300">
                       You
                     </div>
                   ) : (
@@ -111,35 +118,35 @@ const CallOverlay = () => {
 
           {/* Media Controls Footer */}
           {(callMode === "video" || callMode === "audio") && (
-            <div className="p-4 bg-base-200/50 flex items-center justify-center gap-4 border-t border-base-300">
+            <div className="p-3 sm:p-4 bg-base-200/50 flex flex-wrap items-center justify-center gap-2 sm:gap-4 border-t border-base-300">
               <button 
                 onClick={toggleMic} 
-                className={`btn btn-circle ${isMicOn ? "btn-neutral" : "btn-error text-white"}`}
+                className={`btn btn-circle btn-sm sm:btn-md ${isMicOn ? "btn-neutral" : "btn-error text-white"}`}
               >
-                {isMicOn ? <Mic className="size-5" /> : <MicOff className="size-5" />}
+                {isMicOn ? <Mic className="size-4 sm:size-5" /> : <MicOff className="size-4 sm:size-5" />}
               </button>
               
               {callMode === "video" && (
                 <>
                   <button 
                     onClick={toggleVideo} 
-                    className={`btn btn-circle ${isVideoOn ? "btn-neutral" : "btn-error text-white"}`}
+                    className={`btn btn-circle btn-sm sm:btn-md ${isVideoOn ? "btn-neutral" : "btn-error text-white"}`}
                   >
-                    {isVideoOn ? <VideoIcon className="size-5" /> : <VideoOff className="size-5" />}
+                    {isVideoOn ? <VideoIcon className="size-4 sm:size-5" /> : <VideoOff className="size-4 sm:size-5" />}
                   </button>
 
                   <button 
                     onClick={toggleScreenShare} 
-                    className={`btn btn-circle ${isScreenSharing ? "btn-primary text-white" : "btn-neutral"}`}
+                    className={`btn btn-circle btn-sm sm:btn-md ${isScreenSharing ? "btn-primary text-white" : "btn-neutral"}`}
                     title="Share Screen"
                   >
-                    <MonitorUp className="size-5" />
+                    <MonitorUp className="size-4 sm:size-5" />
                   </button>
                 </>
               )}
 
-              <button onClick={rejectCall} className="btn btn-error px-8 rounded-full text-white font-medium ml-4">
-                End Call
+              <button onClick={rejectCall} className="btn btn-error btn-sm sm:btn-md px-6 sm:px-8 rounded-full text-white font-medium ml-2 sm:ml-4">
+                End
               </button>
             </div>
           )}

@@ -43,23 +43,36 @@ const Whiteboard = () => {
     });
   };
 
+  // 🌟 Helper to get exact coordinates for BOTH Mouse and Touch
+  const getCoordinates = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top
+      };
+    }
+    return { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
+  };
+
   const startDrawing = (e) => {
     setIsDrawing(true);
-    setLastPos({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY });
+    setLastPos(getCoordinates(e));
   };
 
   const draw = (e) => {
     if (!isDrawing) return;
     const ctx = canvasRef.current.getContext('2d');
-    const newPos = { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY };
-    drawLine(ctx, lastPos.x, lastPos.y, newPos.x, newPos.y, 'white', true); // Default stroke color
+    const newPos = getCoordinates(e);
+    
+    drawLine(ctx, lastPos.x, lastPos.y, newPos.x, newPos.y, 'white', true);
     setLastPos(newPos);
   };
 
   const stopDrawing = () => setIsDrawing(false);
 
   return (
-    <div className="w-full h-full bg-base-300 rounded-xl overflow-hidden shadow-lg border border-base-100 flex flex-col">
+    <div className="w-full h-full bg-base-300 rounded-none sm:rounded-xl overflow-hidden shadow-lg border-0 sm:border border-base-100 flex flex-col">
       <div className="p-2 bg-base-200 text-center font-semibold text-sm">Shared Whiteboard</div>
       <div className="flex-1 cursor-crosshair">
         <canvas
@@ -68,6 +81,9 @@ const Whiteboard = () => {
           onMouseMove={draw}
           onMouseUp={stopDrawing}
           onMouseOut={stopDrawing}
+          onTouchStart={startDrawing} // 📱 Touch Support
+          onTouchMove={draw}          // 📱 Touch Support
+          onTouchEnd={stopDrawing}    // 📱 Touch Support
           className="block w-full h-full touch-none"
         />
       </div>
