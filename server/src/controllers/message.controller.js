@@ -229,13 +229,20 @@ export const reactToMessage = async (req, res) => {
 };
 
 export const getTurnCredentials = async (req, res) => {
+  // DEBUG: This will show up in your server's dashboard logs (e.g., Render/Vercel logs)
+  console.log("Checking Twilio SID:", process.env.TWILIO_ACCOUNT_SID ? "FOUND" : "MISSING");
+
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+    console.error("CRITICAL: Twilio keys are missing from environment variables!");
+    return res.status(500).json({ error: "Twilio configuration missing on server" });
+  }
+
   try {
     const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
     const token = await client.tokens.create();
     res.status(200).json(token.iceServers);
   } catch (error) {
-    console.error("Twilio error:", error.message);
-    // Fallback to free STUN if Twilio fails
-    res.status(500).json([{ urls: ["stun:stun1.l.google.com:19302"] }]);
+    console.error("Twilio API Error:", error.message);
+    res.status(500).json({ error: error.message });
   }
 };
