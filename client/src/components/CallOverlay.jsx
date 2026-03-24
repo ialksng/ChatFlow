@@ -32,6 +32,9 @@ const CallOverlay = () => {
   const showRemoteVideo = callMode === "video" || remoteIsScreenSharing;
   const showLocalVideo = (callMode === "video" && isVideoOn) || isScreenSharing;
 
+  // Check if the browser supports screen capturing (Desktop = true, Mobile = false)
+  const supportsScreenShare = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm sm:p-4">
       
@@ -148,9 +151,12 @@ const CallOverlay = () => {
                     {isVideoOn ? <VideoIcon className="size-4 sm:size-5" /> : <VideoOff className="size-4 sm:size-5" />}
                   </button>
 
-                  <button onClick={toggleScreenShare} className={`btn btn-circle btn-sm sm:btn-md ${isScreenSharing ? "btn-primary text-white" : "btn-neutral"}`} title="Share Screen">
-                    <MonitorUp className="size-4 sm:size-5" />
-                  </button>
+                  {/* ONLY show Screen Share if the browser actually supports it */}
+                  {supportsScreenShare && (
+                    <button onClick={toggleScreenShare} className={`btn btn-circle btn-sm sm:btn-md ${isScreenSharing ? "btn-primary text-white" : "btn-neutral"}`} title="Share Screen">
+                      <MonitorUp className="size-4 sm:size-5" />
+                    </button>
+                  )}
                 </>
               )}
 
