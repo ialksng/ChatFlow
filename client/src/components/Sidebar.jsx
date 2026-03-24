@@ -6,23 +6,25 @@ import { Users, Bot } from "lucide-react";
 
 const Sidebar = () => {
   const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading } = useChatStore();
-
   const { onlineUsers } = useAuthStore();
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
+
+  // The exact email you used when creating the AI user in MongoDB
+  const BOT_EMAIL = "ai@chatflow.com"; 
 
   useEffect(() => {
     getUsers();
   }, [getUsers]);
 
-  // Filter online users if toggled
+  // 1. Filter users, but ALWAYS keep the bot visible even if "Show online only" is checked
   const filteredUsers = showOnlineOnly
-    ? users.filter((user) => onlineUsers.includes(user._id))
+    ? users.filter((user) => onlineUsers.includes(user._id) || user.email === BOT_EMAIL)
     : users;
 
-  // Pin BuddyBot to the top of the list
+  // 2. Pin the bot to the top based on its EMAIL, not its name
   const sortedUsers = [...filteredUsers].sort((a, b) => {
-    if (a.fullName === "BuddyBot") return -1;
-    if (b.fullName === "BuddyBot") return 1;
+    if (a.email === BOT_EMAIL) return -1;
+    if (b.email === BOT_EMAIL) return 1;
     return 0;
   });
 
@@ -66,8 +68,8 @@ const Sidebar = () => {
                 alt={user.fullName}
                 className="size-12 object-cover rounded-full"
               />
-              {/* Force online status dot for BuddyBot, otherwise check onlineUsers array */}
-              {(user.fullName === "BuddyBot" || onlineUsers.includes(user._id)) && (
+              {/* Force green dot if it's the bot */}
+              {(user.email === BOT_EMAIL || onlineUsers.includes(user._id)) && (
                 <span
                   className="absolute bottom-0 right-0 size-3 bg-green-500 
                   rounded-full ring-2 ring-zinc-900"
@@ -79,10 +81,12 @@ const Sidebar = () => {
             <div className="hidden lg:block text-left min-w-0 flex-1">
               <div className="font-medium truncate flex items-center gap-1">
                 {user.fullName}
-                {user.fullName === "BuddyBot" && <Bot className="size-4 text-primary" />}
+                {/* Show Bot icon if it's the bot */}
+                {user.email === BOT_EMAIL && <Bot className="size-4 text-primary" />}
               </div>
               <div className="text-sm text-zinc-400">
-                {user.fullName === "BuddyBot" ? "AI Assistant" : onlineUsers.includes(user._id) ? "Online" : "Offline"}
+                {/* Force "Online" text for the bot */}
+                {user.email === BOT_EMAIL ? "Always Online" : onlineUsers.includes(user._id) ? "Online" : "Offline"}
               </div>
             </div>
           </button>
