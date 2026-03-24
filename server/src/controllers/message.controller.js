@@ -98,7 +98,7 @@ export const sendMessage = async (req, res) => {
             {
               role: "system",
               // FIX 2: Extremely strict system prompt about changing topics
-              content: "You are BuddyBot, an AI in the ChatFlow app. Answer concisely. CRITICAL INSTRUCTION: Pay absolute attention to the user's LATEST message. If the user changes the topic, you MUST immediately abandon the previous context and answer the new question directly without referencing the past.",
+              content: "You are BuddyBot in the ChatFlow app. CRITICAL INSTRUCTION: You suffer from extreme context blindness. You MUST base your entire response ONLY on the user's very last message. If the user changes topics, completely ignore the previous messages. Be concise and friendly.",
             },
             ...formattedMessages,
           ],
