@@ -15,9 +15,12 @@ const ChatContainer = () => {
     selectedUser,
     subscribeToMessages,
     unsubscribeFromMessages,
+    isTyping, // Pull typing state
   } = useChatStore();
   const { authUser } = useAuthStore();
-  const messageEndRef = useRef(null);
+  
+  // Dedicated scroll anchor
+  const scrollRef = useRef(null);
 
   useEffect(() => {
     getMessages(selectedUser._id);
@@ -27,11 +30,12 @@ const ChatContainer = () => {
     return () => unsubscribeFromMessages();
   }, [selectedUser._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
 
+  // Scroll to bottom when messages change OR when AI starts typing
   useEffect(() => {
-    if (messageEndRef.current && messages) {
-      messageEndRef.current.scrollIntoView({ behavior: "smooth" });
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, isTyping]);
 
   if (isMessagesLoading) {
     return (
@@ -52,7 +56,6 @@ const ChatContainer = () => {
           <div
             key={message._id}
             className={`chat ${message.senderId === authUser._id ? "chat-end" : "chat-start"}`}
-            ref={messageEndRef}
           >
             <div className=" chat-image avatar">
               <div className="size-10 rounded-full border">
@@ -83,6 +86,30 @@ const ChatContainer = () => {
             </div>
           </div>
         ))}
+
+        {/* Typing Indicator Bubble */}
+        {isTyping && (
+          <div className="chat chat-start">
+            <div className="chat-image avatar">
+              <div className="size-10 rounded-full border">
+                <img
+                  src={selectedUser.profilePic || "/avatar.png"}
+                  alt="profile pic"
+                />
+              </div>
+            </div>
+            <div className="chat-header mb-1">
+              <span className="text-xs opacity-50 ml-1">Typing...</span>
+            </div>
+            <div className="chat-bubble flex items-center justify-center w-16 h-12 bg-base-200 text-base-content">
+               {/* DaisyUI Loading dots */}
+              <span className="loading loading-dots loading-md"></span>
+            </div>
+          </div>
+        )}
+
+        {/* Invisible div to act as scroll anchor */}
+        <div ref={scrollRef}></div>
       </div>
 
       <MessageInput />

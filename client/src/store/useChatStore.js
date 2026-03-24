@@ -9,6 +9,7 @@ export const useChatStore = create((set, get) => ({
   selectedUser: null,
   isUsersLoading: false,
   isMessagesLoading: false,
+  isTyping: false, // New state for AI typing indicator
 
   getUsers: async () => {
     set({ isUsersLoading: true });
@@ -33,6 +34,7 @@ export const useChatStore = create((set, get) => ({
       set({ isMessagesLoading: false });
     }
   },
+  
   sendMessage: async (messageData) => {
     const { selectedUser, messages } = get();
     try {
@@ -57,11 +59,26 @@ export const useChatStore = create((set, get) => ({
         messages: [...get().messages, newMessage],
       });
     });
+
+    // Listen for typing events
+    socket.on("typing", (data) => {
+      if (data.senderId === get().selectedUser?._id) {
+        set({ isTyping: true });
+      }
+    });
+
+    socket.on("stopTyping", (data) => {
+      if (data.senderId === get().selectedUser?._id) {
+        set({ isTyping: false });
+      }
+    });
   },
 
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
     socket.off("newMessage");
+    socket.off("typing");
+    socket.off("stopTyping");
   },
 
   setSelectedUser: (selectedUser) => set({ selectedUser }),
