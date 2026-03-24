@@ -26,15 +26,12 @@ app.use(cors({
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 
-// 👇 Removed the "if (production)" wrapper so it always serves the frontend
 app.use(express.static(path.join(__dirname, "client", "dist")));
 
-// 👇 Changed /.*/ to "*" (the standard Express catch-all method)
-app.get("*", (req, res) => {
+app.get(/.*/, (req, res) => {
     res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
 });
 
-// FIX 2: Changed app.listen to server.listen so Socket.io works properly
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     connectDB();
