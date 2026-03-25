@@ -65,6 +65,9 @@ const ChatContainer = () => {
   // Local state for inline editing
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editInputValue, setEditInputValue] = useState("");
+  
+  // State for mobile touch support (active message actions)
+  const [activeMessageId, setActiveMessageId] = useState(null);
 
   useEffect(() => {
     getMessages(selectedUser._id);
@@ -117,7 +120,11 @@ const ChatContainer = () => {
           }, {}) || {};
 
           return (
-            <div key={message._id} className={`chat ${isMine ? "chat-end" : "chat-start"} group`}>
+            <div 
+              key={message._id} 
+              className={`chat ${isMine ? "chat-end" : "chat-start"} group`}
+              onClick={() => setActiveMessageId(activeMessageId === message._id ? null : message._id)}
+            >
               <div className="chat-image avatar">
                 <div className="size-10 rounded-full border">
                   <img
@@ -156,7 +163,7 @@ const ChatContainer = () => {
                       <Ban className="size-4" /> This message was deleted
                     </div>
                   ) : isEditing ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <input 
                         type="text" 
                         className="input input-sm input-bordered text-base-content w-full"
@@ -221,23 +228,30 @@ const ChatContainer = () => {
                   </div>
                 )}
 
-                {/* Message Actions (Visible on Hover) */}
+                {/* Message Actions (Visible on Hover or Tap) */}
                 {!isDeleted && !isEditing && (
-                  <div className={`absolute top-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-base-100/90 p-1 rounded-lg shadow-sm border border-base-300 z-10 
-                    ${isMine ? "-left-28 flex-row-reverse" : "-right-28"} `}>
+                  <div 
+                    className={`absolute top-0 flex items-center gap-1 transition-opacity bg-base-100/90 p-1 rounded-lg shadow-sm border border-base-300 z-10 
+                      ${activeMessageId === message._id ? "opacity-100" : "opacity-0 group-hover:opacity-100"}
+                      ${isMine ? "-left-28 flex-row-reverse" : "-right-28"} `}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     
                     <button onClick={() => setReplyingTo(message)} className="btn btn-ghost btn-xs btn-circle tooltip" data-tip="Reply">
                       <Reply className="size-3.5" />
                     </button>
                     
-                    <div className="dropdown dropdown-hover dropdown-top dropdown-end">
+                    <div className="dropdown dropdown-top dropdown-end">
                       <button tabIndex={0} className="btn btn-ghost btn-xs btn-circle tooltip" data-tip="React">
                         <SmilePlus className="size-3.5" />
                       </button>
                       <ul tabIndex={0} className="dropdown-content z-[1] menu p-1 shadow bg-base-200 rounded-box flex-row gap-1 border border-base-300">
                         {EMOJIS.map(emoji => (
                           <li key={emoji}>
-                            <button onClick={() => reactToMessage(message._id, emoji)} className="px-2 py-1 hover:bg-base-300 text-lg rounded">
+                            <button onClick={() => {
+                              reactToMessage(message._id, emoji);
+                              setActiveMessageId(null); // Optionally close actions after reacting
+                            }} className="px-2 py-1 hover:bg-base-300 text-lg rounded">
                               {emoji}
                             </button>
                           </li>
