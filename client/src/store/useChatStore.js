@@ -3,6 +3,8 @@ import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios";
 import { useAuthStore } from "./useAuthStore";
 
+export const INDRA_AI_ID = "00000000-0000-0000-0000-000000000000";
+
 export const useChatStore = create((set, get) => ({
   messages: [],
   users: [],
@@ -10,15 +12,32 @@ export const useChatStore = create((set, get) => ({
   isUsersLoading: false,
   isMessagesLoading: false,
   isTyping: false,
-  replyingTo: null, // NEW: Track the message being replied to
+  isAiTyping: false, 
+  replyingTo: null,
 
   getUsers: async () => {
     set({ isUsersLoading: true });
     try {
       const res = await axiosInstance.get("/messages/users");
-      set({ users: res.data });
+      let fetchedUsers = res.data || [];
+      
+      // Ensure Indra AI exists in the contact list natively
+      const hasIndra = fetchedUsers.some(u => (u.id || u._id) === INDRA_AI_ID);
+      if (!hasIndra) {
+        fetchedUsers.unshift({
+          _id: INDRA_AI_ID,
+          id: INDRA_AI_ID,
+          fullName: "Indra AI",
+          email: "ai@indra.ialksng.me",
+          profilePic: "/bot.gif" // Or your preferred avatar
+        });
+      }
+      
+      set({ users: fetchedUsers });
     } catch (error) {
-      toast.error(error.response.data.message);
+      console.error("Error fetching users:", error);
+      toast.error(error.response?.data?.message || "Failed to fetch users");
+      set({ users: [] }); // Fallback to empty array to prevent iterable errors
     } finally {
       set({ isUsersLoading: false });
     }
@@ -30,7 +49,7 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.get(`/messages/${userId}`);
       set({ messages: res.data });
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(error.response?.data?.message || "Failed to fetch messages");
     } finally {
       set({ isMessagesLoading: false });
     }
@@ -38,66 +57,30 @@ export const useChatStore = create((set, get) => ({
   
   sendMessage: async (messageData) => {
     const { selectedUser, messages, replyingTo } = get();
+    const userId = selectedUser.id || selectedUser._id;
+    
     try {
-      // Include replyTo ID if it exists
       const dataToSend = replyingTo 
-        ? { ...messageData, replyTo: replyingTo._id } 
+        ? { ...messageData, replyTo: replyingTo.id || replyingTo._id } 
         : messageData;
 
-      const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, dataToSend);
+      // Optimistic UI update (optional, but good for perceived speed)
+      if (userId === INDRA_AI_ID) set({ isAiTyping: true });
+
+      const res = await axiosInstance.post(`/messages/send/${userId}`, dataToSend);
       set({ 
-        messages: [...messages, res.data],
-        replyingTo: null // Clear reply state after sending
+        messages: [...get().messages, res.data],
+        replyingTo: null 
       });
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(error.response?.data?.message || "Message failed to send");
+    } finally {
+      if (userId === INDRA_AI_ID) set({ isAiTyping: false });
     }
   },
-
-  // --- NEW FEATURES COMPLETED BELOW ---
 
   setReplyingTo: (message) => set({ replyingTo: message }),
-
-  deleteMessage: async (messageId) => {
-    try {
-      const res = await axiosInstance.delete(`/messages/delete/${messageId}`);
-      // Optimistically update UI
-      set((state) => ({
-        messages: state.messages.map((msg) => 
-          msg._id === messageId ? res.data : msg
-        ),
-      }));
-      toast.success("Message deleted");
-    } catch (error) {
-      toast.error(error.response.data.message);
-    }
-  },
-
-  editMessage: async (messageId, newText) => {
-    try {
-      const res = await axiosInstance.put(`/messages/edit/${messageId}`, { text: newText });
-      set((state) => ({
-        messages: state.messages.map((msg) => 
-          msg._id === messageId ? res.data : msg
-        ),
-      }));
-    } catch (error) {
-      toast.error(error.response.data.message);
-    }
-  },
-
-  reactToMessage: async (messageId, emoji) => {
-    try {
-      const res = await axiosInstance.post(`/messages/react/${messageId}`, { emoji });
-      set((state) => ({
-        messages: state.messages.map((msg) => 
-          msg._id === messageId ? res.data : msg
-        ),
-      }));
-    } catch (error) {
-      toast.error("Failed to react");
-    }
-  },
+  setSelectedUser: (selectedUser) => set({ selectedUser }),
 
   subscribeToMessages: () => {
     const { selectedUser } = get();
@@ -106,42 +89,29 @@ export const useChatStore = create((set, get) => ({
     const socket = useAuthStore.getState().socket;
 
     socket.on("newMessage", (newMessage) => {
-      const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
-      if (!isMessageSentFromSelectedUser) return;
-
-      set({
-        messages: [...get().messages, newMessage],
-      });
-    });
-
-    // NEW: Listen for edits, deletes, and reactions
-    socket.on("messageUpdated", (updatedMessage) => {
-      const isRelevantChat = updatedMessage.senderId === selectedUser._id || updatedMessage.receiverId === selectedUser._id;
-      if (!isRelevantChat) return;
-
-      set((state) => ({
-        messages: state.messages.map((msg) => 
-          msg._id === updatedMessage._id ? updatedMessage : msg
-        ),
-      }));
+      const selectedId = selectedUser.id || selectedUser._id;
+      // Handle Supabase UUIDs
+      if (newMessage.senderId !== selectedId) return;
+      set({ messages: [...get().messages, newMessage] });
     });
 
     socket.on("typing", (data) => {
-      if (data.senderId === get().selectedUser?._id) set({ isTyping: true });
+      const selectedId = selectedUser.id || selectedUser._id;
+      if (data.senderId === selectedId) set({ isTyping: true });
     });
 
     socket.on("stopTyping", (data) => {
-      if (data.senderId === get().selectedUser?._id) set({ isTyping: false });
+      const selectedId = selectedUser.id || selectedUser._id;
+      if (data.senderId === selectedId) set({ isTyping: false });
     });
   },
 
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
-    socket.off("newMessage");
-    socket.off("messageUpdated"); // NEW: cleanup
-    socket.off("typing");
-    socket.off("stopTyping");
-  },
-
-  setSelectedUser: (selectedUser) => set({ selectedUser }),
+    if (socket) {
+      socket.off("newMessage");
+      socket.off("typing");
+      socket.off("stopTyping");
+    }
+  }
 }));
